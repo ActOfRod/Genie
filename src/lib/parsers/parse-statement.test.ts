@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStatement } from "./index";
+import { fingerprint, parseStatement } from "./index";
 import { parseCsv } from "./csv";
 import { parseOfx } from "./ofx";
 import { guessCategory } from "../categorize";
@@ -95,6 +95,18 @@ describe("categorize and subscriptions", () => {
     expect(guessCategory("MEIJER #184 AUBURN HILLS")).toBe("groceries");
     expect(guessCategory("AMEX EPAYMENT ACH PMT")).toBe("transfer");
     expect(guessCategory("NETFLIX.COM")).toBe("subscriptions");
+  });
+
+  it("treats the same charge as a duplicate with or without a bank reference id", () => {
+    const row = {
+      date: "2026-08-02",
+      description: "MEIJER #184 AUBURN HILLS",
+      merchant: "MEIJER",
+      amountCents: -12844,
+    };
+    const imported = fingerprint("amex", { ...row, externalId: "MJR802" });
+    const seeded = fingerprint("amex", row);
+    expect(imported.some((key) => seeded.includes(key))).toBe(true);
   });
 
   it("detects monthly recurring charges", () => {

@@ -45,10 +45,10 @@ export default function RecurringPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="tabular font-semibold">{formatAbs(item.amountCents)}</span>
-                <Button variant="secondary" onClick={() => void setRecurringStatus(item.id, "ignored")}>
+                <Button variant="secondary" onClick={() => void setRecurringStatus(item.id, item.merchant, "ignored")}>
                   Not a bill
                 </Button>
-                <Button variant="ghost" onClick={() => void setRecurringStatus(item.id, "cancelled")}>
+                <Button variant="ghost" onClick={() => void setRecurringStatus(item.id, item.merchant, "cancelled")}>
                   Cancelled
                 </Button>
               </div>
@@ -66,7 +66,7 @@ export default function RecurringPage() {
                 <span className="text-muted">
                   {item.displayName} · {item.status}
                 </span>
-                <Button variant="ghost" onClick={() => void setRecurringStatus(item.id, "active")}>
+                <Button variant="ghost" onClick={() => void setRecurringStatus(item.id, item.merchant, "active")}>
                   Restore
                 </Button>
               </div>

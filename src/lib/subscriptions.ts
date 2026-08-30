@@ -1,6 +1,5 @@
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { estimateNext } from "./dates";
-import { uid } from "./utils";
 import type { RecurringCharge, RecurringCadence, Transaction } from "./types";
 
 function amountClose(a: number, b: number) {
@@ -50,7 +49,7 @@ export function detectRecurring(transactions: Transaction[]): RecurringCharge[] 
     );
 
     recurring.push({
-      id: uid(),
+      id: last.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       merchant: last.merchant,
       displayName: last.merchant,
       amountCents: avg,

@@ -139,11 +139,10 @@ export function parseStatement(text: string, filename = ""): ParseResult {
 }
 
 export function fingerprint(accountId: string, txn: ParsedTransaction) {
-  return [
-    accountId,
-    txn.externalId ?? "",
-    txn.date,
-    txn.amountCents,
-    txn.description.toLowerCase().replace(/\s+/g, " ").trim(),
-  ].join("|");
+  const desc = txn.description.toLowerCase().replace(/\s+/g, " ").trim();
+  const natural = [accountId, txn.date, txn.amountCents, desc].join("|");
+  if (txn.externalId) {
+    return [`${accountId}|id|${txn.externalId}`, natural];
+  }
+  return [natural];
 }

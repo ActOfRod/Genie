@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { buildSampleHousehold } from "./seed";
@@ -9,19 +10,37 @@ import { guessCategory } from "./categorize";
 import { uid } from "./utils";
 import { inMonth, monthBounds, monthKey, previousMonthKey } from "./dates";
 import { CATEGORIES, isTransferLike } from "./categories";
-import type { Account, Institution, Transaction } from "./types";
+import type { Account, Institution, RecurringStatus, Transaction } from "./types";
 
 const META_ID = "household";
 
 export function useHousehold() {
   const meta = useLiveQuery(() => db.meta.get(META_ID));
-  const accounts = useLiveQuery(() => db.accounts.toArray()) ?? [];
-  const transactions = useLiveQuery(() => db.transactions.orderBy("date").reverse().toArray()) ?? [];
-  const budgets = useLiveQuery(() => db.budgets.toArray()) ?? [];
-  const recurring = useLiveQuery(() => db.recurring.toArray()) ?? [];
-  const ready = meta !== undefined && accounts !== undefined;
+  const accounts = useLiveQuery(() => db.accounts.toArray());
+  const transactionRows = useLiveQuery(() => db.transactions.orderBy("date").reverse().toArray());
+  const budgets = useLiveQuery(() => db.budgets.toArray());
+  const overrides = useLiveQuery(() => db.recurring.toArray());
+  const ready = meta !== undefined;
+  const transactions = transactionRows ?? [];
 
-  return { meta, accounts, transactions, budgets, recurring, ready };
+  const recurring = useMemo(() => {
+    const statusByMerchant = new Map(
+      (overrides ?? []).map((item) => [item.merchant.toLowerCase(), item.status]),
+    );
+    return detectRecurring(transactionRows ?? []).map((item) => ({
+      ...item,
+      status: statusByMerchant.get(item.merchant.toLowerCase()) ?? "active",
+    }));
+  }, [transactionRows, overrides]);
+
+  return {
+    meta,
+    accounts: accounts ?? [],
+    transactions,
+    budgets: budgets ?? [],
+    recurring,
+    ready,
+  };
 }
 
 export async function ensureHousehold() {
@@ -97,14 +116,13 @@ export async function removeAccount(accountId: string) {
     await db.accounts.delete(accountId);
     await db.transactions.where("accountId").equals(accountId).delete();
   });
-  await refreshRecurring();
 }
 
 export async function importParsed(accountId: string, fileText: string, filename: string) {
   const parsed = parseStatement(fileText, filename);
   const existing = await db.transactions.where("accountId").equals(accountId).toArray();
   const seen = new Set(
-    existing.map((txn) =>
+    existing.flatMap((txn) =>
       fingerprint(accountId, {
         date: txn.date,
         description: txn.description,
@@ -118,12 +136,12 @@ export async function importParsed(accountId: string, fileText: string, filename
   const toAdd: Transaction[] = [];
   let skipped = 0;
   for (const row of parsed.transactions) {
-    const key = fingerprint(accountId, row);
-    if (seen.has(key)) {
+    const keys = fingerprint(accountId, row);
+    if (keys.some((key) => seen.has(key))) {
       skipped += 1;
       continue;
     }
-    seen.add(key);
+    for (const key of keys) seen.add(key);
     toAdd.push({
       id: uid(),
       accountId,
@@ -146,8 +164,6 @@ export async function importParsed(accountId: string, fileText: string, filename
       await db.accounts.put({ ...account, lastImportedAt: new Date().toISOString() });
     }
   });
-  await refreshRecurring();
-
   return {
     parsed,
     imported: toAdd.length,
@@ -157,7 +173,6 @@ export async function importParsed(accountId: string, fileText: string, filename
 
 export async function updateTransactionCategory(id: string, categoryId: string) {
   await db.transactions.update(id, { categoryId });
-  await refreshRecurring();
 }
 
 export async function setBudget(categoryId: string, monthlyCents: number) {
@@ -169,24 +184,23 @@ export async function setBudget(categoryId: string, monthlyCents: number) {
   await db.budgets.add({ id: uid(), categoryId, monthlyCents });
 }
 
-export async function setRecurringStatus(id: string, status: "active" | "ignored" | "cancelled") {
-  await db.recurring.update(id, { status });
-}
-
-export async function refreshRecurring() {
-  const transactions = await db.transactions.toArray();
-  const detected = detectRecurring(transactions);
-  const existing = await db.recurring.toArray();
-  const statusByMerchant = new Map(existing.map((item) => [item.merchant.toLowerCase(), item.status]));
-
-  await db.transaction("rw", db.recurring, async () => {
-    await db.recurring.clear();
-    await db.recurring.bulkAdd(
-      detected.map((item) => ({
-        ...item,
-        status: statusByMerchant.get(item.merchant.toLowerCase()) ?? "active",
-      })),
-    );
+export async function setRecurringStatus(id: string, merchant: string, status: RecurringStatus) {
+  const existing = await db.recurring.get(id);
+  if (existing) {
+    await db.recurring.update(id, { status });
+    return;
+  }
+  await db.recurring.put({
+    id,
+    merchant,
+    displayName: merchant,
+    amountCents: 0,
+    cadence: "monthly",
+    categoryId: "subscriptions",
+    lastSeen: "",
+    nextEstimated: "",
+    status,
+    count: 0,
   });
 }
 
