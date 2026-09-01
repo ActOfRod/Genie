@@ -20,4 +20,12 @@ export class GenieDB extends Dexie {
   }
 }
 
-export const db = new GenieDB();
+let instance: GenieDB | undefined;
+
+export function getDb() {
+  if (typeof indexedDB === "undefined") {
+    throw new Error("Genie needs a browser with IndexedDB.");
+  }
+  if (!instance) instance = new GenieDB();
+  return instance;
+}

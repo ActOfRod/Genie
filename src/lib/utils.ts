@@ -28,3 +28,9 @@ export function titleCase(value: string) {
     .toLowerCase()
     .replace(/\b([a-z])/g, (m) => m.toUpperCase());
 }
+
+export function withBase(path: string) {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  if (!path.startsWith("/")) return path;
+  return `${base}${path}`;
+}
