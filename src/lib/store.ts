@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "./db";
+import { getDb } from "./db";
 import { buildSampleHousehold } from "./seed";
 import { detectRecurring } from "./subscriptions";
 import { fingerprint, parseStatement } from "./parsers";
@@ -10,16 +10,28 @@ import { guessCategory } from "./categorize";
 import { uid } from "./utils";
 import { inMonth, monthBounds, monthKey, previousMonthKey } from "./dates";
 import { CATEGORIES, isTransferLike } from "./categories";
-import type { Account, Institution, RecurringStatus, Transaction } from "./types";
+import type { Account, Budget, HouseholdMeta, Institution, RecurringCharge, RecurringStatus, Transaction } from "./types";
 
 const META_ID = "household";
 
 export function useHousehold() {
-  const meta = useLiveQuery(() => db.meta.get(META_ID));
-  const accounts = useLiveQuery(() => db.accounts.toArray());
-  const transactionRows = useLiveQuery(() => db.transactions.orderBy("date").reverse().toArray());
-  const budgets = useLiveQuery(() => db.budgets.toArray());
-  const overrides = useLiveQuery(() => db.recurring.toArray());
+  const meta = useLiveQuery<HouseholdMeta | undefined>(() =>
+    typeof indexedDB === "undefined" ? Promise.resolve(undefined) : getDb().meta.get(META_ID),
+  );
+  const accounts = useLiveQuery<Account[]>(() =>
+    typeof indexedDB === "undefined" ? Promise.resolve([] as Account[]) : getDb().accounts.toArray(),
+  );
+  const transactionRows = useLiveQuery<Transaction[]>(() =>
+    typeof indexedDB === "undefined"
+      ? Promise.resolve([] as Transaction[])
+      : getDb().transactions.orderBy("date").reverse().toArray(),
+  );
+  const budgets = useLiveQuery<Budget[]>(() =>
+    typeof indexedDB === "undefined" ? Promise.resolve([] as Budget[]) : getDb().budgets.toArray(),
+  );
+  const overrides = useLiveQuery<RecurringCharge[]>(() =>
+    typeof indexedDB === "undefined" ? Promise.resolve([] as RecurringCharge[]) : getDb().recurring.toArray(),
+  );
   const ready = meta !== undefined;
   const transactions = transactionRows ?? [];
 
@@ -44,33 +56,33 @@ export function useHousehold() {
 }
 
 export async function ensureHousehold() {
-  const existing = await db.meta.get(META_ID);
+  const existing = await getDb().meta.get(META_ID);
   if (existing) return existing;
   const sample = buildSampleHousehold();
   const recurring = detectRecurring(sample.transactions);
-  await db.transaction("rw", db.meta, db.accounts, db.transactions, db.budgets, db.recurring, async () => {
-    await db.meta.put({
+  await getDb().transaction("rw", getDb().meta, getDb().accounts, getDb().transactions, getDb().budgets, getDb().recurring, async () => {
+    await getDb().meta.put({
       id: META_ID,
       name: "Our household",
       seeded: true,
       createdAt: new Date().toISOString(),
     });
-    await db.accounts.bulkAdd(sample.accounts);
-    await db.transactions.bulkAdd(sample.transactions);
-    await db.budgets.bulkAdd(sample.budgets);
-    await db.recurring.bulkAdd(recurring);
+    await getDb().accounts.bulkAdd(sample.accounts);
+    await getDb().transactions.bulkAdd(sample.transactions);
+    await getDb().budgets.bulkAdd(sample.budgets);
+    await getDb().recurring.bulkAdd(recurring);
   });
-  return db.meta.get(META_ID);
+  return getDb().meta.get(META_ID);
 }
 
 export async function resetHousehold(mode: "sample" | "empty") {
-  await db.transaction("rw", db.meta, db.accounts, db.transactions, db.budgets, db.recurring, async () => {
+  await getDb().transaction("rw", getDb().meta, getDb().accounts, getDb().transactions, getDb().budgets, getDb().recurring, async () => {
     await Promise.all([
-      db.meta.clear(),
-      db.accounts.clear(),
-      db.transactions.clear(),
-      db.budgets.clear(),
-      db.recurring.clear(),
+      getDb().meta.clear(),
+      getDb().accounts.clear(),
+      getDb().transactions.clear(),
+      getDb().budgets.clear(),
+      getDb().recurring.clear(),
     ]);
   });
 
@@ -79,7 +91,7 @@ export async function resetHousehold(mode: "sample" | "empty") {
     return;
   }
 
-  await db.meta.put({
+  await getDb().meta.put({
     id: META_ID,
     name: "Our household",
     seeded: false,
@@ -88,9 +100,9 @@ export async function resetHousehold(mode: "sample" | "empty") {
 }
 
 export async function renameHousehold(name: string) {
-  const meta = await db.meta.get(META_ID);
+  const meta = await getDb().meta.get(META_ID);
   if (!meta) return;
-  await db.meta.put({ ...meta, name });
+  await getDb().meta.put({ ...meta, name });
 }
 
 export async function addAccount(input: {
@@ -107,20 +119,20 @@ export async function addAccount(input: {
     mask: input.mask,
     createdAt: new Date().toISOString(),
   };
-  await db.accounts.add(account);
+  await getDb().accounts.add(account);
   return account;
 }
 
 export async function removeAccount(accountId: string) {
-  await db.transaction("rw", db.accounts, db.transactions, db.recurring, async () => {
-    await db.accounts.delete(accountId);
-    await db.transactions.where("accountId").equals(accountId).delete();
+  await getDb().transaction("rw", getDb().accounts, getDb().transactions, getDb().recurring, async () => {
+    await getDb().accounts.delete(accountId);
+    await getDb().transactions.where("accountId").equals(accountId).delete();
   });
 }
 
 export async function importParsed(accountId: string, fileText: string, filename: string) {
   const parsed = parseStatement(fileText, filename);
-  const existing = await db.transactions.where("accountId").equals(accountId).toArray();
+  const existing = await getDb().transactions.where("accountId").equals(accountId).toArray();
   const seen = new Set(
     existing.flatMap((txn) =>
       fingerprint(accountId, {
@@ -157,11 +169,11 @@ export async function importParsed(accountId: string, fileText: string, filename
     });
   }
 
-  await db.transaction("rw", db.transactions, db.accounts, async () => {
-    if (toAdd.length) await db.transactions.bulkAdd(toAdd);
-    const account = await db.accounts.get(accountId);
+  await getDb().transaction("rw", getDb().transactions, getDb().accounts, async () => {
+    if (toAdd.length) await getDb().transactions.bulkAdd(toAdd);
+    const account = await getDb().accounts.get(accountId);
     if (account) {
-      await db.accounts.put({ ...account, lastImportedAt: new Date().toISOString() });
+      await getDb().accounts.put({ ...account, lastImportedAt: new Date().toISOString() });
     }
   });
   return {
@@ -172,25 +184,25 @@ export async function importParsed(accountId: string, fileText: string, filename
 }
 
 export async function updateTransactionCategory(id: string, categoryId: string) {
-  await db.transactions.update(id, { categoryId });
+  await getDb().transactions.update(id, { categoryId });
 }
 
 export async function setBudget(categoryId: string, monthlyCents: number) {
-  const existing = await db.budgets.where("categoryId").equals(categoryId).first();
+  const existing = await getDb().budgets.where("categoryId").equals(categoryId).first();
   if (existing) {
-    await db.budgets.put({ ...existing, monthlyCents });
+    await getDb().budgets.put({ ...existing, monthlyCents });
     return;
   }
-  await db.budgets.add({ id: uid(), categoryId, monthlyCents });
+  await getDb().budgets.add({ id: uid(), categoryId, monthlyCents });
 }
 
 export async function setRecurringStatus(id: string, merchant: string, status: RecurringStatus) {
-  const existing = await db.recurring.get(id);
+  const existing = await getDb().recurring.get(id);
   if (existing) {
-    await db.recurring.update(id, { status });
+    await getDb().recurring.update(id, { status });
     return;
   }
-  await db.recurring.put({
+  await getDb().recurring.put({
     id,
     merchant,
     displayName: merchant,
@@ -206,11 +218,11 @@ export async function setRecurringStatus(id: string, merchant: string, status: R
 
 export async function exportBackup() {
   const [meta, accounts, transactions, budgets, recurring] = await Promise.all([
-    db.meta.get(META_ID),
-    db.accounts.toArray(),
-    db.transactions.toArray(),
-    db.budgets.toArray(),
-    db.recurring.toArray(),
+    getDb().meta.get(META_ID),
+    getDb().accounts.toArray(),
+    getDb().transactions.toArray(),
+    getDb().budgets.toArray(),
+    getDb().recurring.toArray(),
   ]);
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), meta, accounts, transactions, budgets, recurring }, null, 2);
 }
@@ -224,24 +236,24 @@ export async function importBackup(json: string) {
     recurring?: Awaited<ReturnType<typeof detectRecurring>>;
   };
 
-  await db.transaction("rw", db.meta, db.accounts, db.transactions, db.budgets, db.recurring, async () => {
+  await getDb().transaction("rw", getDb().meta, getDb().accounts, getDb().transactions, getDb().budgets, getDb().recurring, async () => {
     await Promise.all([
-      db.meta.clear(),
-      db.accounts.clear(),
-      db.transactions.clear(),
-      db.budgets.clear(),
-      db.recurring.clear(),
+      getDb().meta.clear(),
+      getDb().accounts.clear(),
+      getDb().transactions.clear(),
+      getDb().budgets.clear(),
+      getDb().recurring.clear(),
     ]);
-    await db.meta.put({
+    await getDb().meta.put({
       id: META_ID,
       name: data.meta?.name ?? "Our household",
       seeded: Boolean(data.meta?.seeded),
       createdAt: new Date().toISOString(),
     });
-    if (data.accounts?.length) await db.accounts.bulkAdd(data.accounts);
-    if (data.transactions?.length) await db.transactions.bulkAdd(data.transactions);
-    if (data.budgets?.length) await db.budgets.bulkAdd(data.budgets);
-    if (data.recurring?.length) await db.recurring.bulkAdd(data.recurring);
+    if (data.accounts?.length) await getDb().accounts.bulkAdd(data.accounts);
+    if (data.transactions?.length) await getDb().transactions.bulkAdd(data.transactions);
+    if (data.budgets?.length) await getDb().budgets.bulkAdd(data.budgets);
+    if (data.recurring?.length) await getDb().recurring.bulkAdd(data.recurring);
   });
 }
 

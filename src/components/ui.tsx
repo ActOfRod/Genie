@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { monthKey, monthLabel, shiftMonth } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
@@ -124,9 +125,9 @@ export function Button({
 
   if (href) {
     return (
-      <a href={href} className={className}>
+      <Link href={href} className={className}>
         {children}
-      </a>
+      </Link>
     );
   }
 

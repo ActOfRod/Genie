@@ -31,6 +31,16 @@ Genie keeps the books in this browser. There is no bank login and no third-party
 
 Duplicate rows are skipped, so you can re-import the same window safely.
 
+## Live site
+
+After a pull request is merged into `main`, GitHub Actions publishes a static build to GitHub Pages:
+
+**https://actofrod.github.io/Genie/**
+
+The first publish needs Pages turned on once: repository **Settings → Pages → Source → GitHub Actions**. After that, every merge to `main` updates the site.
+
+If the repo is private, GitHub Pages also needs a paid GitHub plan, or you can make the repo public (only the app code is public — your transactions stay in your browser).
+
 ## Running locally
 
 ```bash
@@ -40,6 +50,13 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The first visit loads a sample household so you can click around immediately. Replace it from **Settings → Start from scratch**, then import your files.
+
+To preview the GitHub Pages build locally:
+
+```bash
+GITHUB_PAGES=true npm run build
+npm start
+```
 
 ## Privacy
 

@@ -6,6 +6,7 @@ import { parseStatement } from "@/lib/parsers";
 import type { Account, Institution, ParseResult } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { Button } from "./ui";
+import { withBase } from "@/lib/utils";
 
 const PRESETS: Array<{
   name: string;
@@ -135,11 +136,11 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
         {!preview ? (
           <p className="mt-6 text-sm text-muted">
             Nothing selected yet. Try{" "}
-            <a className="font-semibold text-teal underline" href="/samples/amex-sample.csv">
+            <a className="font-semibold text-teal underline" href={withBase("/samples/amex-sample.csv")}>
               a sample Amex CSV
             </a>{" "}
             or{" "}
-            <a className="font-semibold text-teal underline" href="/samples/genisys-sample.qfx">
+            <a className="font-semibold text-teal underline" href={withBase("/samples/genisys-sample.qfx")}>
               a sample Genisys QFX
             </a>
             .
