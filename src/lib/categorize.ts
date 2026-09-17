@@ -137,7 +137,15 @@ const RULES: Array<{ categoryId: string; patterns: RegExp[] }> = [
   },
   {
     categoryId: "personal",
-    patterns: [/\bWILD BILL/, /\b(TOBACCO|SMOKE SHOP|CIGAR)\b/, /\b(GREAT CLIPS|SUPERCUTS|SALON|SPA |BARBER|ULTA|SEPHORA)\b/],
+    patterns: [/\b(GREAT CLIPS|SUPERCUTS|SALON|SPA |BARBER|ULTA|SEPHORA)\b/],
+  },
+  {
+    categoryId: "nicotine",
+    patterns: [/\bWILD BILL/, /\b(VAPE|VAPOR|TOBACCO|SMOKE SHOP|CIGAR)\b/],
+  },
+  {
+    categoryId: "vacation",
+    patterns: [/^VACATION$/, /\b(VACATION FUND|VACATION SAVINGS|VACATION TRIP)\b/],
   },
   {
     categoryId: "travel",
