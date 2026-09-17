@@ -27,7 +27,8 @@ describe("guessCategory", () => {
     expect(guessCategory("THE BROKEN YOLK")).toBe("dining");
     expect(guessCategory("FAMILY DOLLAR")).toBe("shopping");
     expect(guessCategory("STEAM PURCHASE")).toBe("entertainment");
-    expect(guessCategory("WILD BILL'S TOBACCO")).toBe("personal");
+    expect(guessCategory("WILD BILL'S TOBACCO")).toBe("nicotine");
+    expect(guessCategory("SUMMER VACATION RESORT")).toBe("vacation");
     expect(guessCategory("RIVER CHURCH TITHE")).toBe("gifts");
     expect(guessCategory("ORION ANIMAL HOSPITAL")).toBe("pets");
     expect(guessCategory("HILLS SCIENCE DIET")).toBe("pets");
