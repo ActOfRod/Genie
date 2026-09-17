@@ -20,7 +20,6 @@ export const CATEGORIES: Category[] = [
   { id: "pets", name: "Pets", group: "lifestyle", color: "#5B8A3C" },
   { id: "personal", name: "Personal care", group: "lifestyle", color: "#9F1239" },
   { id: "kids", name: "Kids & family", group: "lifestyle", color: "#C2410C" },
-  { id: "vacation", name: "Vacation", group: "lifestyle", color: "#2563EB" },
   { id: "travel", name: "Travel", group: "lifestyle", color: "#1D4ED8" },
   { id: "gifts", name: "Gifts & donations", group: "lifestyle", color: "#A21CAF" },
   { id: "fees", name: "Fees & interest", group: "other", color: "#7F1D1D" },
