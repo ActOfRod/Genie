@@ -5,6 +5,7 @@ import { Button, PageHeader } from "@/components/ui";
 import {
   exportBackup,
   importBackup,
+  recategorizeTransactions,
   renameHousehold,
   signOut,
   useHousehold,
@@ -70,6 +71,49 @@ export default function SettingsPage() {
             />
           </label>
         </div>
+      </section>
+
+      <section className="card mb-4 p-5">
+        <h2 className="font-semibold">Categories</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Genie guesses a category from the merchant name. Bank category labels (like Amex
+          “shopping”) only apply when no merchant rule matches.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            onClick={async () => {
+              const { updated } = await recategorizeTransactions("uncategorized");
+              setMessage(
+                updated === 0
+                  ? "Nothing uncategorized matched a merchant rule."
+                  : `Categorized ${updated} transaction${updated === 1 ? "" : "s"}.`,
+              );
+            }}
+          >
+            Fill uncategorized
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  "Re-apply merchant rules to every matching transaction? Hand-picked categories for merchants we recognize will be overwritten.",
+                )
+              ) {
+                return;
+              }
+              const { updated } = await recategorizeTransactions("rules");
+              setMessage(
+                updated === 0
+                  ? "Every matching transaction already had the rule’s category."
+                  : `Updated ${updated} transaction${updated === 1 ? "" : "s"}.`,
+              );
+            }}
+          >
+            Re-apply merchant rules
+          </Button>
+        </div>
+        {message ? <p className="mt-4 text-sm text-teal-dark">{message}</p> : null}
       </section>
 
       <section className="card mb-4 p-5">
