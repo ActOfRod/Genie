@@ -26,19 +26,15 @@ export default function HomePage() {
       <PageHeader
         eyebrow={meta?.name ?? "Household"}
         title="How the month looks"
-        subtitle={
-          meta?.seeded
-            ? "Sample data is loaded so you can click around. Import your Amex and Genisys files whenever you are ready."
-            : "Spending, bills, and leftover cash for the month you pick."
-        }
+        subtitle="Spending, bills, and leftover cash for the month you pick."
         actions={<MonthSwitcher value={month} onChange={setMonth} />}
       />
 
-      {meta?.seeded ? (
+      {transactions.length === 0 ? (
         <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-gold/40 bg-[#fff6e3] px-4 py-3 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
-          <p>This is a walkthrough household, not your real money yet.</p>
+          <p>The books are empty. Import an Amex or Genisys statement to get started.</p>
           <Button href="/accounts" variant="secondary">
-            Import real statements
+            Import statements
           </Button>
         </div>
       ) : null}

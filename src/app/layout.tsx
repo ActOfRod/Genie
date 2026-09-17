@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
 
 const sans = Plus_Jakarta_Sans({
@@ -23,9 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${display.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
