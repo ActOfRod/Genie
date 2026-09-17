@@ -16,6 +16,7 @@ export const CATEGORIES: Category[] = [
   { id: "shopping", name: "Shopping", group: "lifestyle", color: "#A16207" },
   { id: "entertainment", name: "Entertainment", group: "lifestyle", color: "#BE185D" },
   { id: "health", name: "Health", group: "health", color: "#0F766E" },
+  { id: "pets", name: "Pets", group: "lifestyle", color: "#5B8A3C" },
   { id: "personal", name: "Personal care", group: "lifestyle", color: "#9F1239" },
   { id: "kids", name: "Kids & family", group: "lifestyle", color: "#C2410C" },
   { id: "travel", name: "Travel", group: "lifestyle", color: "#1D4ED8" },

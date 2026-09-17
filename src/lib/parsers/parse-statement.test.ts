@@ -124,7 +124,7 @@ describe("categorize and subscriptions", () => {
         createdAt: date,
       }),
     );
-    const found = detectRecurring(transactions);
+    const found = detectRecurring(transactions, new Date("2026-08-20"));
     expect(found).toHaveLength(1);
     expect(found[0].cadence).toBe("monthly");
     expect(found[0].count).toBe(4);

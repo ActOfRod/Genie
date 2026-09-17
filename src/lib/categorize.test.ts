@@ -29,6 +29,9 @@ describe("guessCategory", () => {
     expect(guessCategory("STEAM PURCHASE")).toBe("entertainment");
     expect(guessCategory("WILD BILL'S TOBACCO")).toBe("personal");
     expect(guessCategory("RIVER CHURCH TITHE")).toBe("gifts");
+    expect(guessCategory("ORION ANIMAL HOSPITAL")).toBe("pets");
+    expect(guessCategory("HILLS SCIENCE DIET")).toBe("pets");
+    expect(guessCategory("CHEWY.COM")).toBe("pets");
   });
 
   it("lets a description rule beat an Amex category hint", () => {

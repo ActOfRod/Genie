@@ -77,6 +77,7 @@ function mapTransaction(row: any): Transaction {
     merchant: row.merchant,
     amountCents: Number(row.amount_cents),
     categoryId: row.category_id,
+    notes: row.notes ?? undefined,
     externalId: row.external_id ?? undefined,
     source: row.source,
     excluded: row.excluded,
@@ -214,12 +215,11 @@ export function useHousehold() {
   const state = store?.state ?? EMPTY;
 
   const recurring = useMemo(() => {
-    const statusByMerchant = new Map(
-      state.overrides.map((row) => [row.merchant.toLowerCase(), row.status]),
-    );
+    const statusByKey = new Map(state.overrides.map((row) => [row.merchant_key, row.status]));
+    const statusByMerchant = new Map(state.overrides.map((row) => [row.merchant.toLowerCase(), row.status]));
     return detectRecurring(state.transactions).map((item) => ({
       ...item,
-      status: statusByMerchant.get(item.merchant.toLowerCase()) ?? "active",
+      status: statusByKey.get(item.id) ?? statusByMerchant.get(item.merchant.toLowerCase()) ?? "active",
     }));
   }, [state.transactions, state.overrides]);
 
@@ -334,11 +334,15 @@ export async function importParsed(accountId: string, fileText: string, filename
 }
 
 export async function updateTransactionCategory(id: string, categoryId: string) {
+  await updateTransaction(id, { categoryId });
+}
+
+export async function updateTransaction(id: string, patch: { categoryId?: string; notes?: string }) {
   const store = requireStore();
-  const { error } = await supabase
-    .from("transactions")
-    .update({ category_id: categoryId })
-    .eq("id", id);
+  const body: Record<string, unknown> = {};
+  if (patch.categoryId !== undefined) body.category_id = patch.categoryId;
+  if (patch.notes !== undefined) body.notes = patch.notes;
+  const { error } = await supabase.from("transactions").update(body).eq("id", id);
   await throwIfError(error);
   await store.refresh();
 }
@@ -472,6 +476,7 @@ export async function importBackup(json: string) {
       merchant: txn.merchant,
       amount_cents: txn.amountCents,
       category_id: txn.categoryId ?? "uncategorized",
+      notes: txn.notes ?? null,
       external_id: txn.externalId ?? null,
       source: txn.source ?? "import",
       excluded: Boolean(txn.excluded),
