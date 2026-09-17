@@ -33,6 +33,7 @@ interface OverrideRow {
   merchant_key: string;
   merchant: string;
   status: RecurringStatus;
+  nickname: string | null;
 }
 
 interface StoreState {
@@ -90,6 +91,15 @@ function mapBudget(row: any): Budget {
     id: row.id,
     categoryId: row.category_id,
     monthlyCents: Number(row.monthly_cents),
+  };
+}
+
+function mapOverride(row: any): OverrideRow {
+  return {
+    merchant_key: row.merchant_key,
+    merchant: row.merchant,
+    status: row.status,
+    nickname: row.nickname ?? null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -155,7 +165,7 @@ export function GenieProvider({
       accounts: (accounts.data ?? []).map(mapAccount),
       transactions: (transactions.data ?? []).map(mapTransaction),
       budgets: (budgets.data ?? []).map(mapBudget),
-      overrides: (overrides.data ?? []) as OverrideRow[],
+      overrides: (overrides.data ?? []).map(mapOverride),
       ready: true,
       error: null,
     });
@@ -215,12 +225,18 @@ export function useHousehold() {
   const state = store?.state ?? EMPTY;
 
   const recurring = useMemo(() => {
-    const statusByKey = new Map(state.overrides.map((row) => [row.merchant_key, row.status]));
-    const statusByMerchant = new Map(state.overrides.map((row) => [row.merchant.toLowerCase(), row.status]));
-    return detectRecurring(state.transactions).map((item) => ({
-      ...item,
-      status: statusByKey.get(item.id) ?? statusByMerchant.get(item.merchant.toLowerCase()) ?? "active",
-    }));
+    const byKey = new Map(state.overrides.map((row) => [row.merchant_key, row]));
+    const byMerchant = new Map(state.overrides.map((row) => [row.merchant.toLowerCase(), row]));
+    return detectRecurring(state.transactions).map((item) => {
+      const override = byKey.get(item.id) ?? byMerchant.get(item.merchant.toLowerCase());
+      const nickname = override?.nickname?.trim() || undefined;
+      return {
+        ...item,
+        status: override?.status ?? "active",
+        nickname,
+        displayName: nickname ?? item.displayName,
+      };
+    });
   }, [state.transactions, state.overrides]);
 
   return {
@@ -377,30 +393,64 @@ export async function recategorizeTransactions(mode: "uncategorized" | "rules") 
 }
 
 export async function setBudget(categoryId: string, monthlyCents: number) {
+  await setBudgets([{ categoryId, monthlyCents }]);
+}
+
+export async function setBudgets(rows: Array<{ categoryId: string; monthlyCents: number }>) {
   const store = requireStore();
-  const { error } = await supabase
-    .from("budgets")
-    .upsert(
-      { household_id: store.householdId(), category_id: categoryId, monthly_cents: monthlyCents },
+  for (const row of rows) {
+    const { error } = await supabase.from("budgets").upsert(
+      { household_id: store.householdId(), category_id: row.categoryId, monthly_cents: row.monthlyCents },
       { onConflict: "household_id,category_id" },
     );
-  await throwIfError(error);
+    await throwIfError(error);
+  }
   await store.refresh();
 }
 
-export async function setRecurringStatus(id: string, merchant: string, status: RecurringStatus) {
+async function upsertRecurringOverride(
+  id: string,
+  merchant: string,
+  patch: { status?: RecurringStatus; nickname?: string | null },
+) {
   const store = requireStore();
+  const existing = store.state.overrides.find((row) => row.merchant_key === id);
+  const status = patch.status ?? existing?.status ?? "active";
+  const nickname =
+    patch.nickname !== undefined ? patch.nickname?.trim() || null : existing?.nickname ?? null;
+
+  if (status === "active" && !nickname) {
+    if (!existing) return;
+    const { error } = await supabase
+      .from("recurring_overrides")
+      .delete()
+      .eq("household_id", store.householdId())
+      .eq("merchant_key", id);
+    await throwIfError(error);
+    await store.refresh();
+    return;
+  }
+
   const { error } = await supabase.from("recurring_overrides").upsert(
     {
       household_id: store.householdId(),
       merchant_key: id,
       merchant,
       status,
+      nickname,
     },
     { onConflict: "household_id,merchant_key" },
   );
   await throwIfError(error);
   await store.refresh();
+}
+
+export async function setRecurringStatus(id: string, merchant: string, status: RecurringStatus) {
+  await upsertRecurringOverride(id, merchant, { status });
+}
+
+export async function setRecurringNickname(id: string, merchant: string, nickname: string) {
+  await upsertRecurringOverride(id, merchant, { nickname });
 }
 
 export async function wipeHousehold() {
@@ -428,7 +478,11 @@ export async function exportBackup() {
       accounts,
       transactions,
       budgets,
-      recurring: overrides.map((row) => ({ merchant: row.merchant, status: row.status })),
+      recurring: overrides.map((row) => ({
+        merchant: row.merchant,
+        status: row.status,
+        nickname: row.nickname,
+      })),
     },
     null,
     2,
@@ -443,7 +497,7 @@ export async function importBackup(json: string) {
     accounts?: Account[];
     transactions?: Transaction[];
     budgets?: Array<{ categoryId: string; monthlyCents: number }>;
-    recurring?: Array<{ merchant: string; status?: RecurringStatus }>;
+    recurring?: Array<{ merchant: string; status?: RecurringStatus; nickname?: string | null }>;
   };
 
   await wipeHousehold();
@@ -500,13 +554,17 @@ export async function importBackup(json: string) {
   }
 
   for (const row of data.recurring ?? []) {
-    if (!row.merchant || !row.status || row.status === "active") continue;
+    if (!row.merchant) continue;
+    const nickname = row.nickname?.trim() || null;
+    const status = row.status ?? "active";
+    if (status === "active" && !nickname) continue;
     const { error } = await supabase.from("recurring_overrides").upsert(
       {
         household_id: householdId,
         merchant_key: row.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         merchant: row.merchant,
-        status: row.status,
+        status,
+        nickname,
       },
       { onConflict: "household_id,merchant_key" },
     );

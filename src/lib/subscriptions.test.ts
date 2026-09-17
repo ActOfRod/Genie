@@ -38,6 +38,31 @@ describe("detectRecurring", () => {
     expect(found[0].amountCents).toBe(-239897);
   });
 
+  it("treats a quarterly phone bill as quarterly, not yearly", () => {
+    const rows = [
+      txn({ date: "2025-09-15", description: "MINT MOBILE", amountCents: -4500, categoryId: "internet" }),
+      txn({ date: "2025-12-15", description: "MINT MOBILE", amountCents: -4500, categoryId: "internet" }),
+      txn({ date: "2026-03-15", description: "MINT MOBILE", amountCents: -4500, categoryId: "internet" }),
+      txn({ date: "2026-06-15", description: "MINT MOBILE", amountCents: -4500, categoryId: "internet" }),
+      txn({ date: "2026-09-15", description: "MINT MOBILE", amountCents: -4500, categoryId: "internet" }),
+    ];
+    const found = detectRecurring(rows, new Date("2026-09-16"));
+    expect(found).toHaveLength(1);
+    expect(found[0].cadence).toBe("quarterly");
+  });
+
+  it("detects a twice-a-year bill", () => {
+    const rows = [
+      txn({ date: "2025-03-01", description: "CAR INSURANCE", amountCents: -62000, categoryId: "insurance" }),
+      txn({ date: "2025-09-01", description: "CAR INSURANCE", amountCents: -62000, categoryId: "insurance" }),
+      txn({ date: "2026-03-01", description: "CAR INSURANCE", amountCents: -62000, categoryId: "insurance" }),
+      txn({ date: "2026-09-01", description: "CAR INSURANCE", amountCents: -62000, categoryId: "insurance" }),
+    ];
+    const found = detectRecurring(rows, new Date("2026-09-16"));
+    expect(found).toHaveLength(1);
+    expect(found[0].cadence).toBe("semiannual");
+  });
+
   it("drops charges that have not come back", () => {
     const rows = [
       txn({ date: "2025-03-07", description: "HUNTINGTON BANKS", amountCents: -51971 }),
