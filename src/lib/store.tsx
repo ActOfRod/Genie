@@ -343,6 +343,35 @@ export async function updateTransactionCategory(id: string, categoryId: string) 
   await store.refresh();
 }
 
+const CATEGORY_UPDATE_CHUNK = 200;
+
+export async function recategorizeTransactions(mode: "uncategorized" | "rules") {
+  const store = requireStore();
+  const byCategory = new Map<string, string[]>();
+
+  for (const txn of store.state.transactions) {
+    const next = guessCategory(txn.description);
+    if (next === "uncategorized" || next === txn.categoryId) continue;
+    if (mode === "uncategorized" && txn.categoryId !== "uncategorized") continue;
+    const ids = byCategory.get(next) ?? [];
+    ids.push(txn.id);
+    byCategory.set(next, ids);
+  }
+
+  let updated = 0;
+  for (const [categoryId, ids] of byCategory) {
+    for (let i = 0; i < ids.length; i += CATEGORY_UPDATE_CHUNK) {
+      const slice = ids.slice(i, i + CATEGORY_UPDATE_CHUNK);
+      const { error } = await supabase.from("transactions").update({ category_id: categoryId }).in("id", slice);
+      await throwIfError(error);
+      updated += slice.length;
+    }
+  }
+
+  await store.refresh();
+  return { updated };
+}
+
 export async function setBudget(categoryId: string, monthlyCents: number) {
   const store = requireStore();
   const { error } = await supabase
