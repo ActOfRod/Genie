@@ -31,6 +31,8 @@ function cadenceFromGaps(gaps: number[]): RecurringCadence | null {
   const mid = sortedGaps[Math.floor(sortedGaps.length / 2)];
   if (mid >= 6 && mid <= 10) return "weekly";
   if (mid >= 25 && mid <= 40) return "monthly";
+  if (mid >= 80 && mid <= 110) return "quarterly";
+  if (mid >= 160 && mid <= 210) return "semiannual";
   if (mid >= 350 && mid <= 395) return "yearly";
   return null;
 }
@@ -38,6 +40,8 @@ function cadenceFromGaps(gaps: number[]): RecurringCadence | null {
 export function isLapsed(lastSeen: string, cadence: RecurringCadence, asOf = new Date()) {
   const days = differenceInCalendarDays(asOf, parseISO(lastSeen));
   if (cadence === "weekly") return days > 18;
+  if (cadence === "quarterly") return days > 130;
+  if (cadence === "semiannual") return days > 220;
   if (cadence === "yearly") return days > 400;
   return days > 50;
 }

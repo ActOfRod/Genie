@@ -10,6 +10,7 @@ import {
   startOfMonth,
   subMonths,
 } from "date-fns";
+import type { RecurringCadence } from "./types";
 
 export function toISODate(value: Date) {
   return format(value, "yyyy-MM-dd");
@@ -77,15 +78,26 @@ export function inMonth(date: string, key: string) {
   return date.startsWith(key);
 }
 
-export function estimateNext(lastSeen: string, cadence: "weekly" | "monthly" | "yearly") {
+export function estimateNext(lastSeen: string, cadence: RecurringCadence) {
   const date = parseISO(lastSeen);
   if (cadence === "weekly") return toISODate(addWeeks(date, 1));
+  if (cadence === "quarterly") return toISODate(addMonths(date, 3));
+  if (cadence === "semiannual") return toISODate(addMonths(date, 6));
   if (cadence === "yearly") return toISODate(addYears(date, 1));
   return toISODate(addMonths(date, 1));
 }
 
 export function monthsAgo(date: Date, months: number) {
   return toISODate(subMonths(date, months));
+}
+
+export type RecurringDateFilter = "all" | "month" | "three-months" | "year";
+
+export function inDateFilter(isoDate: string, filter: RecurringDateFilter, asOf = new Date()) {
+  if (filter === "all") return true;
+  if (filter === "month") return isoDate.startsWith(monthKey(asOf));
+  if (filter === "year") return isoDate.startsWith(String(asOf.getFullYear()));
+  return isoDate >= monthsAgo(asOf, 3);
 }
 
 export function formatShortDate(value: string) {

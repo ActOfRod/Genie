@@ -2,7 +2,7 @@ export type Institution = "amex" | "genisys" | "other";
 export type AccountType = "credit" | "checking" | "savings" | "loan";
 export type TransactionSource = "import" | "manual" | "seed";
 export type RecurringStatus = "active" | "ignored" | "cancelled";
-export type RecurringCadence = "weekly" | "monthly" | "yearly";
+export type RecurringCadence = "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
 
 export type CategoryGroup =
   | "income"
@@ -77,6 +77,7 @@ export interface RecurringCharge {
   id: string;
   merchant: string;
   displayName: string;
+  nickname?: string;
   amountCents: number;
   cadence: RecurringCadence;
   categoryId: string;
