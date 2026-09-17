@@ -144,12 +144,12 @@ const RULES: Array<{ categoryId: string; patterns: RegExp[] }> = [
     patterns: [/\bWILD BILL/, /\b(VAPE|VAPOR|TOBACCO|SMOKE SHOP|CIGAR)\b/],
   },
   {
-    categoryId: "vacation",
-    patterns: [/\bVACATION\b/],
-  },
-  {
     categoryId: "travel",
     patterns: [/\b(AIRLINE|DELTA |UNITED |SOUTHWEST|AMERICAN AIR|AIRBNB|MARRIOTT|HILTON|HYATT|HOTEL|EXPEDIA|BOOKING COM)\b/],
+  },
+  {
+    categoryId: "vacation",
+    patterns: [/\bVACATION\b/],
   },
   {
     categoryId: "gifts",
