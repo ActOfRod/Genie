@@ -1,6 +1,24 @@
 import { differenceInCalendarDays, parseISO } from "date-fns";
 import { estimateNext } from "./dates";
-import type { RecurringCharge, RecurringCadence, Transaction } from "./types";
+import { titleCase } from "./utils";
+import type { RecurringCadence, RecurringCharge, Transaction } from "./types";
+
+const NOISE =
+  /\b(ACH|WITHDRAWAL|DEBIT|CREDIT|CARD|PURCHASE|MOBILE|BANKING|WEB|POS|RECURRING|ONLINE|ELECTRONIC|PAYMENT|PAYMT|PMT|PYMT|TRANSFER|TO|FROM|CHECK)\b/g;
+const STOP = new Set(["THE", "A", "AN", "AND", "FOR", "INC", "LLC"]);
+
+export function recurringMerchantKey(description: string, merchant = "") {
+  const source = `${description} ${merchant}`
+    .toUpperCase()
+    .replace(/[#*]/g, " ")
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .replace(NOISE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = source.split(" ").filter((word) => word && !STOP.has(word));
+  if (words.length === 0) return (merchant || description).toLowerCase().slice(0, 32);
+  return words.slice(0, 2).join(" ");
+}
 
 function amountClose(a: number, b: number) {
   const max = Math.max(Math.abs(a), Math.abs(b), 1);
@@ -9,20 +27,29 @@ function amountClose(a: number, b: number) {
 
 function cadenceFromGaps(gaps: number[]): RecurringCadence | null {
   if (gaps.length === 0) return null;
-  const avg = gaps.reduce((sum, n) => sum + n, 0) / gaps.length;
-  if (avg >= 6 && avg <= 10) return "weekly";
-  if (avg >= 25 && avg <= 40) return "monthly";
-  if (avg >= 350 && avg <= 395) return "yearly";
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const mid = sortedGaps[Math.floor(sortedGaps.length / 2)];
+  if (mid >= 6 && mid <= 10) return "weekly";
+  if (mid >= 25 && mid <= 40) return "monthly";
+  if (mid >= 350 && mid <= 395) return "yearly";
   return null;
 }
 
-export function detectRecurring(transactions: Transaction[]): RecurringCharge[] {
+export function isLapsed(lastSeen: string, cadence: RecurringCadence, asOf = new Date()) {
+  const days = differenceInCalendarDays(asOf, parseISO(lastSeen));
+  if (cadence === "weekly") return days > 18;
+  if (cadence === "yearly") return days > 400;
+  return days > 50;
+}
+
+export function detectRecurring(transactions: Transaction[], asOf = new Date()): RecurringCharge[] {
   const groups = new Map<string, Transaction[]>();
 
   for (const txn of transactions) {
     if (txn.excluded || txn.amountCents >= 0) continue;
     if (txn.categoryId === "transfer" || txn.categoryId === "income") continue;
-    const key = `${txn.merchant.toLowerCase()}|${Math.round(Math.abs(txn.amountCents) / 100)}`;
+    const key = recurringMerchantKey(txn.description, txn.merchant);
+    if (!key) continue;
     const list = groups.get(key) ?? [];
     list.push(txn);
     groups.set(key, list);
@@ -30,35 +57,37 @@ export function detectRecurring(transactions: Transaction[]): RecurringCharge[] 
 
   const recurring: RecurringCharge[] = [];
 
-  for (const [, list] of groups) {
+  for (const [key, list] of groups) {
     const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
-    if (sorted.length < 2) continue;
+    const window = sorted.slice(-8);
+    if (window.length < 2) continue;
 
     const gaps = [];
-    for (let i = 1; i < sorted.length; i += 1) {
-      gaps.push(differenceInCalendarDays(parseISO(sorted[i].date), parseISO(sorted[i - 1].date)));
+    for (let i = 1; i < window.length; i += 1) {
+      gaps.push(differenceInCalendarDays(parseISO(window[i].date), parseISO(window[i - 1].date)));
     }
 
     const cadence = cadenceFromGaps(gaps);
     if (!cadence) continue;
-    if (!sorted.every((txn) => amountClose(txn.amountCents, sorted[0].amountCents))) continue;
 
-    const last = sorted[sorted.length - 1];
-    const avg = Math.round(
-      sorted.reduce((sum, txn) => sum + txn.amountCents, 0) / sorted.length,
-    );
+    const last = window[window.length - 1];
+    if (isLapsed(last.date, cadence, asOf)) continue;
+
+    const similar = window.filter((txn) => amountClose(txn.amountCents, last.amountCents));
+    const amountSource = similar.length >= 2 ? similar : [last];
+    const avg = Math.round(amountSource.reduce((sum, txn) => sum + txn.amountCents, 0) / amountSource.length);
 
     recurring.push({
-      id: last.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      merchant: last.merchant,
-      displayName: last.merchant,
+      id: key.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      merchant: titleCase(key),
+      displayName: titleCase(key),
       amountCents: avg,
       cadence,
       categoryId: last.categoryId,
       lastSeen: last.date,
       nextEstimated: estimateNext(last.date, cadence),
       status: "active",
-      count: sorted.length,
+      count: window.length,
     });
   }
 

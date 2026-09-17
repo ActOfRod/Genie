@@ -21,7 +21,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         {eyebrow ? <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">{eyebrow}</p> : null}
-        <h1 className="font-[family-name:var(--font-display)] text-4xl tracking-tight text-ink">{title}</h1>
+        <h1 className="font-[family-name:var(--font-display)] text-3xl tracking-tight text-ink sm:text-4xl">{title}</h1>
         {subtitle ? <p className="mt-2 max-w-xl text-sm leading-6 text-muted">{subtitle}</p> : null}
       </div>
       {actions}

@@ -127,6 +127,15 @@ const RULES: Array<{ categoryId: string; patterns: RegExp[] }> = [
     ],
   },
   {
+    categoryId: "pets",
+    patterns: [
+      /\bORION ANIMAL\b/,
+      /\b(ANIMAL HOSPITAL|VETERINARY|VET CLINIC)\b/,
+      /\b(HILLS? SCIENCE|SCIENCE DIET|HILL S SCIENCE)\b/,
+      /\b(CHEWY|PETCO|PETSMART|PET SUPPLIES|ROYAL CANIN|PET FOOD)\b/,
+    ],
+  },
+  {
     categoryId: "personal",
     patterns: [/\bWILD BILL/, /\b(TOBACCO|SMOKE SHOP|CIGAR)\b/, /\b(GREAT CLIPS|SUPERCUTS|SALON|SPA |BARBER|ULTA|SEPHORA)\b/],
   },
