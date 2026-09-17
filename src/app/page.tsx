@@ -5,8 +5,10 @@ import { useMemo, useState } from "react";
 import { categoryTotals, monthSummary, useHousehold } from "@/lib/store";
 import { monthKey } from "@/lib/dates";
 import { formatAbs } from "@/lib/money";
+import { monthPoints } from "@/lib/trends";
 import { Button, CategoryDot, Money, MonthSwitcher, PageHeader, Progress } from "@/components/ui";
 import { TransactionRow } from "@/components/transaction-row";
+import { TrendChart } from "@/components/trend-chart";
 
 export default function HomePage() {
   const { meta, accounts, transactions, recurring, ready } = useHousehold();
@@ -15,7 +17,8 @@ export default function HomePage() {
   const categories = useMemo(() => categoryTotals(transactions, month), [transactions, month]);
   const maxSpend = Math.max(...categories.map((item) => Math.abs(item.amountCents)), 1);
   const upcoming = recurring.filter((item) => item.status === "active").slice(0, 5);
-  const recent = transactions.filter((txn) => txn.date.startsWith(month)).slice(0, 7);
+  const recent = transactions.filter((txn) => txn.date.startsWith(month)).slice(0, 6);
+  const points = useMemo(() => monthPoints(transactions, recurring, 8), [transactions, recurring]);
 
   if (!ready) {
     return <div className="py-20 text-center text-muted">Opening the household books…</div>;
@@ -26,7 +29,7 @@ export default function HomePage() {
       <PageHeader
         eyebrow={meta?.name ?? "Household"}
         title="How the month looks"
-        subtitle="Spending, bills, and leftover cash for the month you pick."
+        subtitle="Spend versus income, plus the bills that keep coming back."
         actions={<MonthSwitcher value={month} onChange={setMonth} />}
       />
 
@@ -39,27 +42,35 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <article className="card p-5 md:col-span-2">
-          <p className="text-sm text-muted">Spent this month</p>
-          <div className="mt-2">
-            <Money cents={Math.abs(summary.spent)} size="xl" />
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <article className="card p-5">
+          <div className="mb-1 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted">Spend vs income</p>
+              <div className="mt-1">
+                <Money cents={Math.abs(summary.spent)} size="lg" />
+              </div>
+            </div>
+            <p className="text-right text-xs leading-5 text-muted">
+              {summary.income > 0 ? `${formatAbs(summary.income)} in pay` : "No pay this month"}
+              <br />
+              {summary.delta < 0
+                ? `${formatAbs(summary.delta)} less than last month`
+                : summary.delta > 0
+                  ? `${formatAbs(summary.delta)} more than last month`
+                  : "Same as last month"}
+            </p>
           </div>
-          <p className="mt-3 text-sm text-muted">
-            {summary.delta < 0
-              ? `${formatAbs(summary.delta)} less than last month`
-              : summary.delta > 0
-                ? `${formatAbs(summary.delta)} more than last month`
-                : "Same as last month"}
-            {summary.income > 0 ? ` · ${formatAbs(summary.income)} in pay` : ""}
-          </p>
+          <TrendChart points={points} primaryLabel="Spend" secondaryLabel="Income" />
         </article>
         <article className="card p-5">
           <p className="text-sm text-muted">Left after bills and spending</p>
           <div className="mt-2">
             <Money cents={summary.leftover} signed size="lg" />
           </div>
-          <p className="mt-3 text-sm text-muted">Income minus spending, ignoring transfers.</p>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Income minus spending, ignoring transfers. Tap a transaction below to recategorize it.
+          </p>
         </article>
       </section>
 
@@ -100,13 +111,13 @@ export default function HomePage() {
           </div>
           <div className="divide-y divide-line">
             {upcoming.length === 0 ? (
-              <p className="text-sm text-muted">Genie will flag subscriptions after a couple of imports.</p>
+              <p className="text-sm text-muted">Live bills show up here after they hit a few months in a row.</p>
             ) : (
               upcoming.map((item) => (
                 <div key={item.id} className="flex items-center justify-between py-3">
                   <div>
                     <p className="text-sm font-semibold">{item.displayName}</p>
-                    <p className="text-xs text-muted">Next around {item.nextEstimated}</p>
+                    <p className="text-xs text-muted">Next {item.nextEstimated}</p>
                   </div>
                   <Money cents={item.amountCents} size="sm" />
                 </div>
@@ -119,7 +130,7 @@ export default function HomePage() {
       <section className="card mt-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4">
           <h2 className="font-[family-name:var(--font-display)] text-2xl">Recent activity</h2>
-          <div className="flex gap-2 text-xs text-muted">
+          <div className="flex max-w-[50%] flex-wrap justify-end gap-2 text-xs text-muted">
             {accounts.map((account) => (
               <span key={account.id} className="rounded-full bg-paper-2 px-2 py-1">
                 {account.name}
@@ -133,7 +144,6 @@ export default function HomePage() {
               key={transaction.id}
               transaction={transaction}
               account={accounts.find((account) => account.id === transaction.accountId)}
-              editable={false}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { monthKey } from "@/lib/dates";
 import { formatAbs } from "@/lib/money";
 import { categoryTotals, setBudget, useHousehold } from "@/lib/store";
+import { CategoryPicker } from "@/components/category-picker";
 import { Button, CategoryDot, MonthSwitcher, PageHeader, Progress } from "@/components/ui";
 
 export default function BudgetsPage() {
@@ -49,13 +50,12 @@ export default function BudgetsPage() {
             void setBudget(draftId, Math.round(dollars * 100));
           }}
         >
-          <select className="field" value={draftId} onChange={(event) => setDraftId(event.target.value)}>
-            {CATEGORIES.filter((category) => category.id !== "transfer" && category.id !== "income").map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          <CategoryPicker
+            value={draftId}
+            onChange={setDraftId}
+            label="Budget category"
+            excludeIds={["transfer", "income"]}
+          />
           <input
             className="field"
             inputMode="decimal"

@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CATEGORIES } from "@/lib/categories";
 import { monthKey } from "@/lib/dates";
 import { useHousehold } from "@/lib/store";
+import { CategoryPicker } from "@/components/category-picker";
 import { MonthSwitcher, PageHeader } from "@/components/ui";
 import { TransactionRow } from "@/components/transaction-row";
 
@@ -32,7 +32,7 @@ export default function ActivityPage() {
       <PageHeader
         eyebrow="Every dollar"
         title="Activity"
-        subtitle="Search, filter, and recategorize. Tap a category on a row to change it."
+        subtitle="Tap a row for details, a category, and a note. Built for a phone thumb."
         actions={<MonthSwitcher value={month} onChange={setMonth} />}
       />
 
@@ -43,22 +43,26 @@ export default function ActivityPage() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <select className="field" value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-          <option value="all">All accounts</option>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setAccountId("all")}
+            className={`shrink-0 rounded-full border px-3 py-2 text-sm ${accountId === "all" ? "border-teal bg-teal-soft text-teal-dark" : "border-line bg-card text-muted"}`}
+          >
+            All accounts
+          </button>
           {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
+            <button
+              key={account.id}
+              type="button"
+              onClick={() => setAccountId(account.id)}
+              className={`shrink-0 rounded-full border px-3 py-2 text-sm ${accountId === account.id ? "border-teal bg-teal-soft text-teal-dark" : "border-line bg-card text-muted"}`}
+            >
               {account.name}
-            </option>
+            </button>
           ))}
-        </select>
-        <select className="field" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-          <option value="all">All categories</option>
-          {CATEGORIES.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+        </div>
+        <CategoryPicker allowAll value={categoryId} onChange={setCategoryId} label="Filter category" />
       </div>
 
       <section className="card overflow-hidden">

@@ -20,6 +20,7 @@ Migrations live in `supabase/migrations/` and have already been applied to the p
 
 - One shared **household**; both users are rows in `household_members`.
 - Every data table (`accounts`, `transactions`, `budgets`, `recurring_overrides`) carries a `household_id` and is protected by row-level security via `public.is_household_member(uuid)` (SECURITY DEFINER).
+- `transactions.notes` is optional clarification text (added in `20260917030000_transaction_notes.sql`). Apply that migration if an older project is missing the column.
 - Anonymous requests see nothing. A signed-in user only sees rows for households they belong to. Signing up does not grant access to anything — membership rows are created manually.
 - Realtime is enabled on the data tables so multiple signed-in devices stay in sync.
 
