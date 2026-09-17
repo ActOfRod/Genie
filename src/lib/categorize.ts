@@ -144,7 +144,7 @@ const RULES: Array<{ categoryId: string; patterns: RegExp[] }> = [
     patterns: [/\bWILD BILL/, /\b(VAPE|VAPOR|TOBACCO|SMOKE SHOP|CIGAR)\b/],
   },
   {
-    categoryId: "vacation",
+    categoryId: "travel",
     patterns: [/^VACATION$/, /\b(VACATION FUND|VACATION SAVINGS|VACATION TRIP)\b/],
   },
   {
