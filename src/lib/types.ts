@@ -54,10 +54,7 @@ export interface Budget {
 }
 
 export interface HouseholdMeta {
-  id: string;
   name: string;
-  seeded: boolean;
-  createdAt: string;
 }
 
 export interface ParsedTransaction {

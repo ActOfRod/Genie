@@ -2,7 +2,7 @@
 
 A simple household money app, inspired by Rocket Money, built for **American Express** and **Genisys Credit Union**.
 
-Genie keeps the books in this browser. There is no bank login and no third-party aggregator. You download a statement from Amex or Genisys, drop it in, and Genie categorizes spending, spots recurring charges, and tracks budgets.
+Sign in as a household member, import statements from Amex or Genisys, and Genie categorizes spending, spots recurring charges, and tracks budgets. Data lives in a shared Supabase database protected by row-level security, so both members see the same books on any device.
 
 ## What you can do
 
@@ -33,13 +33,11 @@ Duplicate rows are skipped, so you can re-import the same window safely.
 
 ## Live site
 
-After a pull request is merged into `main`, GitHub Actions publishes a static build to GitHub Pages:
+Every merge to `main` publishes a static build to GitHub Pages:
 
 **https://actofrod.github.io/Genie/**
 
-The first publish needs Pages turned on once: repository **Settings → Pages → Source → GitHub Actions**. After that, every merge to `main` updates the site.
-
-If the repo is private, GitHub Pages also needs a paid GitHub plan, or you can make the repo public (only the app code is public — your transactions stay in your browser).
+The site is public but the data is not: without signing in as a household member, nothing loads.
 
 ## Running locally
 
@@ -49,7 +47,7 @@ npm test
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The first visit loads a sample household so you can click around immediately. Replace it from **Settings → Start from scratch**, then import your files.
+Open [http://localhost:3000](http://localhost:3000) and sign in as a household member.
 
 To preview the GitHub Pages build locally:
 
@@ -58,6 +56,9 @@ GITHUB_PAGES=true npm run build
 npm start
 ```
 
-## Privacy
+## Storage & security
 
-Transactions are stored in IndexedDB on the device that opens the app. Use **Settings → Download backup** if you want a copy, or to share the books with each other on a second computer.
+- All data lives in Supabase (project notes in `supabase/README.md`) behind email/password auth.
+- Every table uses row-level security keyed to household membership — anonymous visitors and non-members see nothing.
+- Login credentials are managed in the Supabase dashboard, not in this repo.
+- Use **Settings → Download backup** for a JSON copy of everything.

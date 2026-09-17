@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   Landmark,
+  LogOut,
   Receipt,
   Repeat,
   Settings,
@@ -12,6 +13,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/lib/store";
+import { useSession } from "./providers";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -23,6 +26,11 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const session = useSession();
+  const displayName =
+    (session?.user.user_metadata?.display_name as string | undefined) ??
+    session?.user.email?.split("@")[0] ??
+    "Member";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl">
@@ -66,6 +74,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Settings className="h-4 w-4" />
           Settings
         </Link>
+        <div className="mt-2 flex items-center justify-between rounded-2xl bg-paper-2/60 px-3 py-2.5">
+          <span className="flex items-center gap-2 text-sm font-medium text-ink">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-teal text-xs font-bold text-white">
+              {displayName[0]}
+            </span>
+            {displayName}
+          </span>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="rounded-full p-1.5 text-muted hover:bg-white/70 hover:text-ink"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col pb-24 md:pb-0">

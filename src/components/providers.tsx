@@ -1,29 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ensureHousehold } from "@/lib/store";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
+import { GenieProvider } from "@/lib/store";
+import { AppShell } from "./app-shell";
+import { LoginScreen } from "./login-screen";
+
+const SessionContext = createContext<Session | null>(null);
+
+export function useSession() {
+  return useContext(SessionContext);
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    void ensureHousehold().catch((cause: unknown) => {
-      const message = cause instanceof Error ? cause.message : "Genie could not open the household books.";
-      setError(message);
+    void supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
     });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+      setAuthReady(true);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  if (error) {
-    return (
-      <div className="mx-auto max-w-lg px-6 py-20 text-center">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl">Genie hit a snag</h1>
-        <p className="mt-3 text-sm leading-6 text-muted">{error}</p>
-        <p className="mt-3 text-sm text-muted">
-          Try another browser, or turn off private mode — Genie stores data on this device.
-        </p>
-      </div>
-    );
+  if (!authReady) {
+    return <div className="py-24 text-center text-muted">Rubbing the lamp…</div>;
   }
 
-  return children;
+  if (!session) {
+    return <LoginScreen />;
+  }
+
+  return (
+    <SessionContext.Provider value={session}>
+      <GenieProvider session={session}>
+        <AppShell>{children}</AppShell>
+      </GenieProvider>
+    </SessionContext.Provider>
+  );
 }

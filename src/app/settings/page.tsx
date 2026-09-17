@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { Button, PageHeader } from "@/components/ui";
-import { exportBackup, importBackup, renameHousehold, resetHousehold, useHousehold } from "@/lib/store";
+import {
+  exportBackup,
+  importBackup,
+  renameHousehold,
+  signOut,
+  useHousehold,
+  wipeHousehold,
+} from "@/lib/store";
 
 export default function SettingsPage() {
   const { meta, ready } = useHousehold();
@@ -28,7 +35,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="The quiet stuff"
         title="Settings"
-        subtitle="Data stays in this browser until you export a backup. That is on purpose — household finances should not live on a stranger's server by default."
+        subtitle="The books live in the household database, so Nathan and Nina always see the same numbers, on any device, after signing in."
       />
 
       <section className="card mb-4 p-5">
@@ -42,7 +49,8 @@ export default function SettingsPage() {
       <section className="card mb-4 p-5">
         <h2 className="font-semibold">Backup</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Download a JSON file to move Genie to another computer, or to keep a copy before you replace sample data.
+          Download a JSON copy of everything, or restore one. Restoring replaces what is in the
+          database — backups from the older browser-only version of Genie work too.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => void downloadBackup()}>Download backup</Button>
@@ -55,6 +63,7 @@ export default function SettingsPage() {
               onChange={async (event) => {
                 const file = event.target.files?.[0];
                 if (!file) return;
+                if (!window.confirm("Restoring replaces everything currently in the household. Continue?")) return;
                 await importBackup(await file.text());
                 setMessage("Backup restored.");
               }}
@@ -63,32 +72,33 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="card p-5">
-        <h2 className="font-semibold">Reset</h2>
+      <section className="card mb-4 p-5">
+        <h2 className="font-semibold">Start over</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Start over with the walkthrough household, or wipe everything and import only your files.
+          Deletes every account, transaction, and budget in the household — for both of you. There is no undo, so download a backup first.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void resetHousehold("sample");
-              setMessage("Sample household restored.");
-            }}
-          >
-            Reload sample data
-          </Button>
+        <div className="mt-4">
           <Button
             variant="ghost"
             onClick={() => {
-              void resetHousehold("empty");
-              setMessage("Books are empty. Add accounts next.");
+              if (!window.confirm("Delete all household data for both members? This cannot be undone.")) return;
+              void wipeHousehold().then(() => setMessage("The books are empty. Add accounts next."));
             }}
           >
-            Start from scratch
+            Delete all data
           </Button>
         </div>
         {message ? <p className="mt-4 text-sm text-teal-dark">{message}</p> : null}
+      </section>
+
+      <section className="card p-5">
+        <h2 className="font-semibold">Session</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">Signed in on this device until you sign out.</p>
+        <div className="mt-4">
+          <Button variant="secondary" onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        </div>
       </section>
     </div>
   );
