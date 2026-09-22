@@ -168,43 +168,45 @@ export default function RecurringPage() {
                 <span className="tabular text-sm font-semibold">{formatAbs(item.amountCents)}</span>
               </div>
               {editingId === item.id ? (
-                <form
-                  className="mt-3 flex flex-col gap-2 sm:flex-row"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    void saveNickname(item, String(formData.get("nickname") ?? ""));
-                  }}
-                >
-                  <input
-                    className="field"
-                    name="nickname"
-                    value={nicknameDraft}
-                    onChange={(event) => {
-                      setNicknameDraft(event.target.value);
-                      if (nicknameError) setNicknameError(null);
+                <>
+                  <form
+                    className="mt-3 flex flex-col gap-2 sm:flex-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const formData = new FormData(event.currentTarget);
+                      void saveNickname(item, String(formData.get("nickname") ?? ""));
                     }}
-                    placeholder="Nickname"
-                    autoFocus
-                    aria-label="Nickname"
-                  />
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={savingNicknameId === item.id}>
-                      {savingNicknameId === item.id ? "Saving…" : "Save"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={savingNicknameId === item.id}
-                      onClick={() => {
-                        setEditingId(null);
-                        setNicknameError(null);
+                  >
+                    <input
+                      className="field"
+                      name="nickname"
+                      value={nicknameDraft}
+                      onChange={(event) => {
+                        setNicknameDraft(event.target.value);
+                        if (nicknameError) setNicknameError(null);
                       }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-                {nicknameError ? <p className="mt-2 text-sm text-rose">{nicknameError}</p> : null}
+                      placeholder="Nickname"
+                      autoFocus
+                      aria-label="Nickname"
+                    />
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={savingNicknameId === item.id}>
+                        {savingNicknameId === item.id ? "Saving…" : "Save"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={savingNicknameId === item.id}
+                        onClick={() => {
+                          setEditingId(null);
+                          setNicknameError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                  {nicknameError ? <p className="mt-2 text-sm text-rose">{nicknameError}</p> : null}
+                </>
               ) : (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void setRecurringStatus(item.id, item.merchant, "ignored")}>
