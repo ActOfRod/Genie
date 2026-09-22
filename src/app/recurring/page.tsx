@@ -40,6 +40,8 @@ export default function RecurringPage() {
   const [dateFilter, setDateFilter] = useState<RecurringDateFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nicknameDraft, setNicknameDraft] = useState("");
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
+  const [savingNicknameId, setSavingNicknameId] = useState<string | null>(null);
   const active = recurring.filter((item) => item.status === "active");
   const visible = active.filter(
     (item) => item.cadence === cadenceFilter && inDateFilter(item.lastSeen, dateFilter),
@@ -54,11 +56,20 @@ export default function RecurringPage() {
   function startNickname(item: RecurringCharge) {
     setEditingId(item.id);
     setNicknameDraft(item.nickname ?? item.displayName);
+    setNicknameError(null);
   }
 
-  async function saveNickname(item: RecurringCharge) {
-    await setRecurringNickname(item.id, item.merchant, nicknameDraft);
-    setEditingId(null);
+  async function saveNickname(item: RecurringCharge, nickname: string) {
+    setSavingNicknameId(item.id);
+    setNicknameError(null);
+    try {
+      await setRecurringNickname(item.id, item.merchant, nickname);
+      setEditingId(null);
+    } catch (error) {
+      setNicknameError(error instanceof Error ? error.message : "Could not save nickname.");
+    } finally {
+      setSavingNicknameId(null);
+    }
   }
 
   if (!ready) return <div className="py-20 text-center text-muted">Looking for repeating charges…</div>;
@@ -157,28 +168,45 @@ export default function RecurringPage() {
                 <span className="tabular text-sm font-semibold">{formatAbs(item.amountCents)}</span>
               </div>
               {editingId === item.id ? (
-                <form
-                  className="mt-3 flex flex-col gap-2 sm:flex-row"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveNickname(item);
-                  }}
-                >
-                  <input
-                    className="field"
-                    value={nicknameDraft}
-                    onChange={(event) => setNicknameDraft(event.target.value)}
-                    placeholder="Nickname"
-                    autoFocus
-                    aria-label="Nickname"
-                  />
-                  <div className="flex gap-2">
-                    <Button type="submit">Save</Button>
-                    <Button variant="ghost" onClick={() => setEditingId(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
+                <>
+                  <form
+                    className="mt-3 flex flex-col gap-2 sm:flex-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const formData = new FormData(event.currentTarget);
+                      void saveNickname(item, String(formData.get("nickname") ?? ""));
+                    }}
+                  >
+                    <input
+                      className="field"
+                      name="nickname"
+                      value={nicknameDraft}
+                      onChange={(event) => {
+                        setNicknameDraft(event.target.value);
+                        if (nicknameError) setNicknameError(null);
+                      }}
+                      placeholder="Nickname"
+                      autoFocus
+                      aria-label="Nickname"
+                    />
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={savingNicknameId === item.id}>
+                        {savingNicknameId === item.id ? "Saving…" : "Save"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={savingNicknameId === item.id}
+                        onClick={() => {
+                          setEditingId(null);
+                          setNicknameError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                  {nicknameError ? <p className="mt-2 text-sm text-rose">{nicknameError}</p> : null}
+                </>
               ) : (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => void setRecurringStatus(item.id, item.merchant, "ignored")}>
