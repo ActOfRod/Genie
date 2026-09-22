@@ -110,6 +110,10 @@ interface StoreApi {
   householdId: () => string;
 }
 
+interface SupabaseErrorLike {
+  message: string;
+}
+
 const StoreContext = createContext<StoreApi | null>(null);
 
 let activeStore: StoreApi | null = null;
@@ -250,8 +254,59 @@ export function useHousehold() {
   };
 }
 
-async function throwIfError(error: { message: string } | null) {
+function isMissingRecurringNicknameColumn(error: SupabaseErrorLike | null) {
+  const message = error?.message.toLowerCase() ?? "";
+  return (
+    message.includes("recurring_overrides") &&
+    message.includes("nickname") &&
+    (message.includes("schema cache") || message.includes("column"))
+  );
+}
+
+function recurringNicknameSchemaError() {
+  return new Error(
+    "Recurring nicknames are not available until the Supabase migration for recurring_overrides.nickname is applied.",
+  );
+}
+
+async function throwIfError(error: SupabaseErrorLike | null) {
   if (error) throw new Error(error.message);
+}
+
+async function saveRecurringOverrideRow(input: {
+  householdId: string;
+  merchantKey: string;
+  merchant: string;
+  status: RecurringStatus;
+  nickname: string | null;
+}) {
+  const row = {
+    household_id: input.householdId,
+    merchant_key: input.merchantKey,
+    merchant: input.merchant,
+    status: input.status,
+  };
+  const { error } = await supabase.from("recurring_overrides").upsert(
+    {
+      ...row,
+      nickname: input.nickname,
+    },
+    { onConflict: "household_id,merchant_key" },
+  );
+
+  if (!isMissingRecurringNicknameColumn(error)) {
+    await throwIfError(error);
+    return;
+  }
+
+  if (input.nickname) {
+    throw recurringNicknameSchemaError();
+  }
+
+  const { error: fallbackError } = await supabase.from("recurring_overrides").upsert(row, {
+    onConflict: "household_id,merchant_key",
+  });
+  await throwIfError(fallbackError);
 }
 
 export async function renameHousehold(name: string) {
@@ -431,17 +486,13 @@ async function upsertRecurringOverride(
     return;
   }
 
-  const { error } = await supabase.from("recurring_overrides").upsert(
-    {
-      household_id: store.householdId(),
-      merchant_key: id,
-      merchant,
-      status,
-      nickname,
-    },
-    { onConflict: "household_id,merchant_key" },
-  );
-  await throwIfError(error);
+  await saveRecurringOverrideRow({
+    householdId: store.householdId(),
+    merchantKey: id,
+    merchant,
+    status,
+    nickname,
+  });
   await store.refresh();
 }
 
@@ -558,17 +609,13 @@ export async function importBackup(json: string) {
     const nickname = row.nickname?.trim() || null;
     const status = row.status ?? "active";
     if (status === "active" && !nickname) continue;
-    const { error } = await supabase.from("recurring_overrides").upsert(
-      {
-        household_id: householdId,
-        merchant_key: row.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-        merchant: row.merchant,
-        status,
-        nickname,
-      },
-      { onConflict: "household_id,merchant_key" },
-    );
-    await throwIfError(error);
+    await saveRecurringOverrideRow({
+      householdId,
+      merchantKey: row.merchant.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      merchant: row.merchant,
+      status,
+      nickname,
+    });
   }
 
   if (data.meta?.name) {
