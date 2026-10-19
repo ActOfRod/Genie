@@ -1,17 +1,8 @@
 import type { Metadata } from "next";
-import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const sans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const display = Fraunces({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
+const sans={variable:""};const display={variable:""};
 
 export const metadata: Metadata = {
   title: "Genie — household money",
@@ -22,7 +13,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${display.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <Providers>{children}</Providers>
+        {children}
       </body>
     </html>
   );
