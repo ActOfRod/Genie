@@ -2,18 +2,29 @@
 
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 
+type PdfjsWorkerGlobal = typeof globalThis & { pdfjsWorker?: unknown };
+
+/**
+ * Load pdf.js and its "worker" code into the page itself. pdf.js then runs
+ * its parser on the main thread instead of a Web Worker. Next/Turbopack
+ * rewrites `new Worker(...)` into a bundled classic worker, and that wrapped
+ * worker can fail on some browsers (e.g. "Unknown action from worker:
+ * undefined"). Statements are only a few pages, so in-page parsing is fine.
+ */
+async function loadPdfjs() {
+  const scope = globalThis as PdfjsWorkerGlobal;
+  if (!scope.pdfjsWorker) {
+    scope.pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs");
+  }
+  return import("pdfjs-dist/legacy/build/pdf.mjs");
+}
+
 /**
  * Pull the visible text out of a PDF as lines (top-to-bottom, left-to-right).
  * Runs entirely in the browser; the file never leaves the device.
  */
 export async function extractPdfLines(data: ArrayBuffer): Promise<string[]> {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  if (!pdfjs.GlobalWorkerOptions.workerPort) {
-    pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-      new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url),
-      { type: "module" },
-    );
-  }
+  const pdfjs = await loadPdfjs();
 
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
   const lines: string[] = [];
