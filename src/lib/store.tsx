@@ -12,7 +12,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { detectRecurring } from "./subscriptions";
-import { fingerprint, parseStatement } from "./parsers";
+import { fingerprint } from "./parsers";
 import { guessCategory } from "./categorize";
 import { inMonth, monthBounds, monthKey, previousMonthKey } from "./dates";
 import { CATEGORIES, isTransferLike } from "./categories";
@@ -20,6 +20,7 @@ import type {
   Account,
   Budget,
   Institution,
+  ParseResult,
   RecurringStatus,
   Transaction,
 } from "./types";
@@ -114,6 +115,28 @@ interface SupabaseErrorLike {
   message: string;
 }
 
+// Supabase (PostgREST) caps every response at 1000 rows regardless of
+// `.limit()`, so page through transactions to load the full history.
+const TRANSACTION_PAGE = 1000;
+const TRANSACTION_MAX = 50000;
+
+async function fetchAllTransactions() {
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const rows: any[] = [];
+  for (let from = 0; from < TRANSACTION_MAX; from += TRANSACTION_PAGE) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("date", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + TRANSACTION_PAGE - 1);
+    if (error) return { data: null, error };
+    rows.push(...(data ?? []));
+    if (!data || data.length < TRANSACTION_PAGE) break;
+  }
+  return { data: rows, error: null };
+}
+
 const StoreContext = createContext<StoreApi | null>(null);
 
 let activeStore: StoreApi | null = null;
@@ -153,7 +176,7 @@ export function GenieProvider({
 
     const [accounts, transactions, budgets, overrides] = await Promise.all([
       supabase.from("accounts").select("*").order("created_at"),
-      supabase.from("transactions").select("*").order("date", { ascending: false }).limit(20000),
+      fetchAllTransactions(),
       supabase.from("budgets").select("*"),
       supabase.from("recurring_overrides").select("*"),
     ]);
@@ -351,9 +374,8 @@ export async function removeAccount(accountId: string) {
 
 const IMPORT_CHUNK = 500;
 
-export async function importParsed(accountId: string, fileText: string, filename: string) {
+export async function importParsed(accountId: string, parsed: ParseResult) {
   const store = requireStore();
-  const parsed = parseStatement(fileText, filename);
   const existing = store.state.transactions.filter((txn) => txn.accountId === accountId);
   const seen = new Set(
     existing.flatMap((txn) =>
