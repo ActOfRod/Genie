@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { addAccount, importParsed } from "@/lib/store";
 import { parseStatement } from "@/lib/parsers";
+import { parsePdfStatementLines } from "@/lib/parsers/pdf-statement";
 import type { Account, Institution, ParseResult } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { Button } from "./ui";
@@ -14,7 +15,7 @@ const PRESETS: Array<{
   type: Account["type"];
   hint: string;
 }> = [
-  { name: "American Express", institution: "amex", type: "credit", hint: "CSV from americanexpress.com" },
+  { name: "American Express", institution: "amex", type: "credit", hint: "CSV from americanexpress.com or PDF from the Amex app" },
   { name: "Genisys Checking", institution: "genisys", type: "checking", hint: "CSV or Quicken QFX" },
   { name: "Genisys Savings", institution: "genisys", type: "savings", hint: "CSV or Quicken QFX" },
 ];
@@ -22,10 +23,10 @@ const PRESETS: Array<{
 export function ImportPanel({ accounts }: { accounts: Account[] }) {
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [preview, setPreview] = useState<ParseResult | null>(null);
-  const [filename, setFilename] = useState("");
-  const [fileText, setFileText] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
 
   const selected = useMemo(
     () => accounts.find((account) => account.id === accountId),
@@ -33,29 +34,49 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
   );
 
   async function onFile(file: File) {
-    const text = await file.text();
-    setFilename(file.name);
-    setFileText(text);
-    setPreview(parseStatement(text, file.name));
     setResult(null);
+    setError(null);
+    setPreview(null);
+    setReading(true);
+    try {
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      if (isPdf) {
+        const { extractPdfLines } = await import("@/lib/parsers/pdf-text");
+        const lines = await extractPdfLines(await file.arrayBuffer());
+        setPreview(parsePdfStatementLines(lines, file.name));
+      } else {
+        setPreview(parseStatement(await file.text(), file.name));
+      }
+    } catch (err) {
+      setError(`Could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setReading(false);
+    }
   }
 
   async function createPreset(preset: (typeof PRESETS)[number]) {
-    const account = await addAccount({
-      name: preset.name,
-      institution: preset.institution,
-      type: preset.type,
-    });
-    setAccountId(account.id);
+    setError(null);
+    try {
+      const account = await addAccount({
+        name: preset.name,
+        institution: preset.institution,
+        type: preset.type,
+      });
+      setAccountId(account.id);
+    } catch (err) {
+      setError(`Could not create ${preset.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   async function confirmImport() {
-    if (!accountId || !fileText) return;
+    if (!accountId || !preview) return;
     setBusy(true);
+    setError(null);
     try {
-      const outcome = await importParsed(accountId, fileText, filename);
+      const outcome = await importParsed(accountId, preview);
       setResult(`Imported ${outcome.imported} new transactions. Skipped ${outcome.skipped} duplicates.`);
-      setPreview(outcome.parsed);
+    } catch (err) {
+      setError(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusy(false);
     }
@@ -66,7 +87,7 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
       <section className="card p-5">
         <h2 className="font-[family-name:var(--font-display)] text-2xl">Add a statement</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Genie does not log into your bank. Download a file from Amex or Genisys, then drop it here. Live bank linking can come later.
+          Genie does not log into your bank. Download a file from Amex or Genisys (CSV, QFX, or an Amex PDF statement), then drop it here. Live bank linking can come later.
         </p>
 
         <label className="mt-5 block text-xs font-semibold uppercase tracking-[0.16em] text-muted">
@@ -100,14 +121,15 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
         <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-paper/50 px-4 py-10 text-center hover:bg-teal-soft/40">
           <input
             type="file"
-            accept=".csv,.ofx,.qfx,.qbo,.txt"
+            accept=".csv,.ofx,.qfx,.qbo,.txt,.pdf,application/pdf"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
+              event.target.value = "";
               if (file) void onFile(file);
             }}
           />
-          <span className="text-sm font-semibold">Drop a CSV, OFX, or QFX file</span>
+          <span className="text-sm font-semibold">{reading ? "Reading file…" : "Drop a CSV, OFX, QFX, or PDF file"}</span>
           <span className="mt-1 text-xs text-muted">
             {selected ? `Importing into ${selected.name}` : "Choose an account above"}
           </span>
@@ -115,7 +137,7 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
 
         <div className="mt-5 space-y-3 text-sm leading-6 text-muted">
           <p>
-            <strong className="text-ink">Amex:</strong> americanexpress.com → Account → Statements & Activity → Download → CSV.
+            <strong className="text-ink">Amex:</strong> americanexpress.com → Account → Statements & Activity → Download → CSV. On the Amex app, open a statement and share/save the PDF.
           </p>
           <p>
             <strong className="text-ink">Genisys:</strong> Online banking → the account → Download transactions → spreadsheet, or Quicken Web Connect (.qfx).
@@ -174,6 +196,7 @@ export function ImportPanel({ accounts }: { accounts: Account[] }) {
             {result ? <p className="mt-3 text-sm text-teal-dark">{result}</p> : null}
           </>
         )}
+        {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
       </section>
     </div>
   );
