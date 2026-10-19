@@ -10,7 +10,7 @@ Sign in as a household member, import statements from Amex or Genisys, and Genie
 - Search and recategorize activity
 - Review subscriptions and other repeating bills
 - Set monthly budgets
-- Import Amex CSV and Genisys CSV / QFX (Quicken Web Connect)
+- Import Amex CSV or PDF statements and Genisys CSV / QFX (Quicken Web Connect)
 - Export a JSON backup to move the household to another computer
 
 ## Importing statements
@@ -21,6 +21,8 @@ Sign in as a household member, import statements from Amex or Genisys, and Genie
 2. Open the card → **Statements & Activity** → **Download**
 3. Choose **CSV**
 4. In Genie, open **Accounts** and drop the file on the Amex account
+
+On the Amex mobile app, statements only export as PDF — save/share the PDF and drop it into Genie the same way. PDFs are read in the browser (they are not uploaded anywhere); scanned/image-only PDFs can't be read.
 
 **Genisys Credit Union**
 
