@@ -6,8 +6,9 @@ import type { ParseResult, ParsedTransaction } from "../types";
 const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec";
 
 // A transaction line starts with a date: 08/22/26, 08/22/2026, 08/22, Aug 22, 2026, Aug 22.
+// The date may be the whole line; Amex often puts the merchant on the next line.
 const LEADING_DATE = new RegExp(
-  `^(\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?|(?:${MONTHS})[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?)\\*?\\s+`,
+  `^(\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?|(?:${MONTHS})[a-z]*\\.?\\s+\\d{1,2}(?:,?\\s+\\d{4})?)\\*?(?:\\s+|$)`,
   "i",
 );
 
@@ -111,12 +112,13 @@ export function parsePdfStatementLines(lines: string[], filename = "", today = n
     const secondDate = rest.match(LEADING_DATE);
     if (secondDate && readDate(secondDate[1])) rest = rest.slice(secondDate[0].length);
 
-    // Descriptions sometimes wrap so the amount lands on a following line.
+    // Amex wraps a charge across several lines (phone, item detail) and sometimes
+    // drops the amount onto its own line. Stop at the next charge or a totals row.
     let amountMatch = rest.match(TRAILING_AMOUNT);
     let consumed = 0;
-    while (!amountMatch && consumed < 2 && i + consumed + 1 < cleaned.length) {
+    while (!amountMatch && consumed < 6 && i + consumed + 1 < cleaned.length) {
       const next = cleaned[i + consumed + 1];
-      if (LEADING_DATE.test(next)) break;
+      if (LEADING_DATE.test(next) || SUMMARY_LINE.test(next)) break;
       rest = `${rest} ${next}`;
       consumed += 1;
       amountMatch = rest.match(TRAILING_AMOUNT);
