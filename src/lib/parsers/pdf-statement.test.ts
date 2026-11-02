@@ -49,6 +49,25 @@ describe("parsePdfStatementLines", () => {
     expect(parsePdfStatementLines(["Hello world"], "x.pdf", TODAY).warnings[0]).toMatch(/Could not find/);
   });
 
+  it("joins Amex detail lines and ignores a pay-over-time mark on the amount", () => {
+    const lines = [
+      "American Express",
+      "Closing Date 09/21/26",
+      "08/22/26",
+      "MEIJER #184 AUBURN HILLS MI",
+      "800-555-1212",
+      "GROCERY 2 EA",
+      "$87.43",
+      "09/02/26 SPOTIFY USA $11.99 ⧫",
+      "Total New Charges $99.42",
+    ];
+    const result = parsePdfStatementLines(lines, "statement.pdf", TODAY);
+    expect(result.transactions.map((txn) => [txn.date, txn.description, txn.amountCents])).toEqual([
+      ["2026-08-22", "MEIJER #184 AUBURN HILLS MI 800-555-1212 GROCERY 2 EA", -8743],
+      ["2026-09-02", "SPOTIFY USA", -1199],
+    ]);
+  });
+
   it("flags sign assumptions for non-Amex PDFs", () => {
     const result = parsePdfStatementLines(["01/02/2026 COFFEE SHOP 4.00"], "card.pdf", TODAY);
     expect(result.source).toBe("generic");

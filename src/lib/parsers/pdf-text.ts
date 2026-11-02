@@ -1,22 +1,25 @@
 "use client";
 
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
-
-type PdfjsWorkerGlobal = typeof globalThis & { pdfjsWorker?: unknown };
+import { withBase } from "../utils";
 
 /**
- * Load pdf.js and its "worker" code into the page itself. pdf.js then runs
- * its parser on the main thread instead of a Web Worker. Next/Turbopack
- * rewrites `new Worker(...)` into a bundled classic worker, and that wrapped
- * worker can fail on some browsers (e.g. "Unknown action from worker:
- * undefined"). Statements are only a few pages, so in-page parsing is fine.
+ * pdf.js assets copied to public/pdfjs by scripts/copy-pdfjs-assets.mjs.
+ * The worker is loaded from this URL, not bundled. Next/Turbopack rewrites
+ * `new Worker(new URL("pdfjs-dist/..."))` into a classic worker whose messages
+ * arrive without an action ("Unknown action from worker: undefined").
  */
+function pdfjsAsset(file: string) {
+  return withBase(`/pdfjs/${file}`);
+}
+
 async function loadPdfjs() {
-  const scope = globalThis as PdfjsWorkerGlobal;
-  if (!scope.pdfjsWorker) {
-    scope.pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const workerSrc = pdfjsAsset("pdf.worker.min.js");
+  if (pdfjs.GlobalWorkerOptions.workerSrc !== workerSrc) {
+    pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
   }
-  return import("pdfjs-dist/legacy/build/pdf.mjs");
+  return pdfjs;
 }
 
 /**
@@ -26,7 +29,13 @@ async function loadPdfjs() {
 export async function extractPdfLines(data: ArrayBuffer): Promise<string[]> {
   const pdfjs = await loadPdfjs();
 
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(data) });
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(data),
+    standardFontDataUrl: pdfjsAsset("standard_fonts/"),
+    cMapUrl: pdfjsAsset("cmaps/"),
+    cMapPacked: true,
+    wasmUrl: pdfjsAsset("wasm/"),
+  });
   const lines: string[] = [];
   try {
     const doc = await loadingTask.promise;
@@ -41,7 +50,12 @@ export async function extractPdfLines(data: ArrayBuffer): Promise<string[]> {
         const x = item.transform[4];
         const y = item.transform[5];
         const height = Math.abs(item.height) || 8;
-        const row = rows.find((candidate) => Math.abs(candidate.y - y) <= Math.max(2, Math.min(candidate.height, height) / 2));
+        // Amex prints the date, merchant, and amount a few pixels off one baseline.
+        // Keep the first baseline as the anchor so nearby rows do not chain together.
+        const row = rows.find((candidate) => {
+          const band = Math.max(7, Math.min(candidate.height, height) * 0.6);
+          return Math.abs(candidate.y - y) <= band;
+        });
         if (row) {
           row.items.push({ x, width: item.width, str: item.str });
         } else {

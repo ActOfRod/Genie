@@ -1,4 +1,15 @@
+import { spawnSync } from "node:child_process";
+import path from "node:path";
 import type { NextConfig } from "next";
+
+// pdf.js must load its worker, fonts, and cmaps as real files. Turbopack's
+// wrapped worker reports "Unknown action from worker: undefined".
+const copy = spawnSync(process.execPath, [path.join(process.cwd(), "scripts/copy-pdfjs-assets.mjs")], {
+  stdio: "inherit",
+});
+if (copy.status !== 0) {
+  throw new Error("Failed to copy pdf.js assets into public/pdfjs");
+}
 
 const basePath = process.env.GITHUB_PAGES === "true" ? "/Genie" : "";
 
