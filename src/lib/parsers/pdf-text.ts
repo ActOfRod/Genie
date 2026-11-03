@@ -22,6 +22,30 @@ async function loadPdfjs() {
   return pdfjs;
 }
 
+type TextChunk = { items?: TextItem[] };
+
+/**
+ * pdf.js getTextContent() does `for await` on a ReadableStream. Safari still
+ * has no ReadableStream async iterator, and that throws
+ * "undefined is not a function (near '...t of e...')". getReader() works.
+ */
+export async function readTextChunks(stream: ReadableStream<TextChunk>): Promise<TextItem[]> {
+  const reader = stream.getReader();
+  const items: TextItem[] = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value?.items;
+      if (!chunk) continue;
+      for (let index = 0; index < chunk.length; index += 1) items.push(chunk[index]);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return items;
+}
+
 /**
  * Pull the visible text out of a PDF as lines (top-to-bottom, left-to-right).
  * Runs entirely in the browser; the file never leaves the device.
@@ -41,11 +65,10 @@ export async function extractPdfLines(data: ArrayBuffer): Promise<string[]> {
     const doc = await loadingTask.promise;
     for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
       const page = await doc.getPage(pageNumber);
-      const content = await page.getTextContent();
+      const textItems = await readTextChunks(page.streamTextContent());
       const rows: Array<{ y: number; height: number; items: Array<{ x: number; width: number; str: string }> }> = [];
 
-      for (const raw of content.items) {
-        const item = raw as TextItem;
+      for (const item of textItems) {
         if (typeof item.str !== "string" || !item.str.trim()) continue;
         const x = item.transform[4];
         const y = item.transform[5];
