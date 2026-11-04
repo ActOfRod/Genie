@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guessCategory } from "./categorize";
+import { categoryForTransaction, guessCategory, merchantCategoryKey } from "./categorize";
 
 describe("guessCategory", () => {
   it("maps household merchants from the cheat sheet", () => {
@@ -26,6 +26,9 @@ describe("guessCategory", () => {
     expect(guessCategory("MARKET@WORK")).toBe("dining");
     expect(guessCategory("THE BROKEN YOLK")).toBe("dining");
     expect(guessCategory("FAMILY DOLLAR")).toBe("shopping");
+    expect(guessCategory("THE HOME DEPOT 002862 FLINT MI")).toBe("repairs");
+    expect(guessCategory("LOWE'S #2305 ROCHESTER HIL MI")).toBe("repairs");
+    expect(guessCategory("RITE WAY PLUMBING")).toBe("repairs");
     expect(guessCategory("STEAM PURCHASE")).toBe("entertainment");
     expect(guessCategory("WILD BILL'S TOBACCO")).toBe("nicotine");
     expect(guessCategory("VACATION")).toBe("travel");
@@ -49,5 +52,41 @@ describe("guessCategory", () => {
     expect(guessCategory("SOME LOCAL SHOP", "Merchandise & Supplies-Internet Purchase")).toBe(
       "shopping",
     );
+  });
+});
+
+describe("merchantCategoryKey", () => {
+  it("treats Walmart spellings and store numbers as one merchant", () => {
+    const samples = [
+      "WAL-MART SUPERCENTERGRAND BLANC         MI",
+      "WAL-MART SUPERCENTER 3726 3726 GRAND BLANC MI",
+      "DEBIT PURCHASE WALMART.COM 8009666546 BENTONVILLE AR",
+      "POS PURCHASE Wal-Mart Super Center GRAND BLANC MI",
+      "POS PURCHASE WAL-MART #3726 GRAND BLANC MI",
+    ];
+    expect(new Set(samples.map((sample) => merchantCategoryKey(sample)))).toEqual(new Set(["WALMART"]));
+  });
+
+  it("keeps Meijer gas separate from Meijer groceries", () => {
+    expect(merchantCategoryKey("DEBIT PURCHASE MEIJER INC #197 Q01 OXFORD MI")).toBe("MEIJER");
+    expect(merchantCategoryKey("MEIJER GAS AUBURN HILLS MI")).toBe("MEIJER GAS");
+    expect(merchantCategoryKey("DEBIT PURCHASE THE BROKEN YOLK LLC ORION MI")).toBe("BROKEN YOLK");
+    expect(merchantCategoryKey("POS PURCHASE NST THE HOME DEPOT 002862 FLINT MI")).toBe("HOME DEPOT");
+    expect(merchantCategoryKey("POS PURCHASE LOWE'S #2305 ROCHESTER HIL MI")).toBe("LOWES");
+  });
+
+  it("does not learn a merchant from transfers", () => {
+    expect(merchantCategoryKey("Mobile banking Deposit Transfer from Nina Marie Thompson S:1000 : Walmart")).toBe(
+      null,
+    );
+    expect(merchantCategoryKey("allowance REMOTE BANKING")).toBe(null);
+  });
+
+  it("prefers a category the household already taught for that merchant", () => {
+    const learned = new Map([["WALMART", "shopping"]]);
+    expect(
+      categoryForTransaction("DEBIT PURCHASE WALMART.COM 8009666546 BENTONVILLE AR", "WAL", undefined, learned),
+    ).toBe("shopping");
+    expect(categoryForTransaction("DEBIT PURCHASE MEIJER INC #197 OXFORD MI", "MEIJER")).toBe("groceries");
   });
 });

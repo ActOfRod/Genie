@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { categoryName } from "@/lib/categories";
 import { formatLongDate } from "@/lib/dates";
 import { updateTransaction } from "@/lib/store";
 import type { Account, Transaction } from "@/lib/types";
@@ -18,6 +19,8 @@ export function TransactionSheet({
 }) {
   const [notes, setNotes] = useState(transaction.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const dirty = notes !== (transaction.notes ?? "");
 
   useEffect(() => {
@@ -64,8 +67,27 @@ export function TransactionSheet({
             <p className="mb-2 text-sm font-semibold">Category</p>
             <CategoryPicker
               value={transaction.categoryId}
-              onChange={(categoryId) => void updateTransaction(transaction.id, { categoryId })}
+              onChange={(categoryId) => {
+                setNotice(null);
+                setCategoryError(null);
+                void updateTransaction(transaction.id, { categoryId })
+                  .then((result) => {
+                    if (result.alsoUpdated > 0 && result.merchantLabel) {
+                      const noun = result.alsoUpdated === 1 ? "charge" : "charges";
+                      setNotice(
+                        `Marked ${result.alsoUpdated} other ${result.merchantLabel} ${noun} as ${categoryName(categoryId)}.`,
+                      );
+                    } else if (result.remembered && result.merchantLabel) {
+                      setNotice(`Genie will mark other ${result.merchantLabel} charges as ${categoryName(categoryId)}.`);
+                    }
+                  })
+                  .catch((error: unknown) => {
+                    setCategoryError(error instanceof Error ? error.message : "Could not update the category.");
+                  });
+              }}
             />
+            {notice ? <p className="mt-2 text-sm text-teal-dark">{notice}</p> : null}
+            {categoryError ? <p className="mt-2 text-sm text-rose">{categoryError}</p> : null}
           </div>
           <div>
             <p className="mb-2 text-sm font-semibold">Clarification</p>

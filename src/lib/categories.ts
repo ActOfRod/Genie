@@ -6,6 +6,7 @@ export const CATEGORIES: Category[] = [
   { id: "dining", name: "Dining", group: "food", color: "#C45C26" },
   { id: "coffee", name: "Coffee", group: "food", color: "#8A5A32" },
   { id: "housing", name: "Housing", group: "housing", color: "#4C6A7A" },
+  { id: "repairs", name: "Repairs & maintenance", group: "housing", color: "#A15C38" },
   { id: "utilities", name: "Utilities", group: "bills", color: "#2F6F8F" },
   { id: "internet", name: "Internet & phone", group: "bills", color: "#3D5A80" },
   { id: "insurance", name: "Insurance", group: "bills", color: "#5C4E8A" },

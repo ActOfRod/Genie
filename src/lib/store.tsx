@@ -13,7 +13,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { detectRecurring } from "./subscriptions";
 import { fingerprint } from "./parsers";
-import { guessCategory } from "./categorize";
+import { categoryForTransaction, merchantCategoryKey, merchantCategoryLabel } from "./categorize";
 import { inMonth, monthBounds, monthKey, previousMonthKey } from "./dates";
 import { CATEGORIES, isTransferLike } from "./categories";
 import type {
@@ -37,12 +37,18 @@ interface OverrideRow {
   nickname: string | null;
 }
 
+interface MerchantRule {
+  merchantKey: string;
+  categoryId: string;
+}
+
 interface StoreState {
   household: HouseholdRow | null;
   accounts: Account[];
   transactions: Transaction[];
   budgets: Budget[];
   overrides: OverrideRow[];
+  merchantRules: MerchantRule[];
   ready: boolean;
   error: string | null;
 }
@@ -53,6 +59,7 @@ const EMPTY: StoreState = {
   transactions: [],
   budgets: [],
   overrides: [],
+  merchantRules: [],
   ready: false,
   error: null,
 };
@@ -102,6 +109,28 @@ function mapOverride(row: any): OverrideRow {
     status: row.status,
     nickname: row.nickname ?? null,
   };
+}
+
+function mapMerchantRule(row: any): MerchantRule {
+  return {
+    merchantKey: row.merchant_key,
+    categoryId: row.category_id,
+  };
+}
+
+function learnedCategoryMap(rules: MerchantRule[]) {
+  return new Map(rules.map((rule) => [rule.merchantKey, rule.categoryId]));
+}
+
+function isMissingMerchantRulesTable(error: SupabaseErrorLike | null) {
+  const message = error?.message.toLowerCase() ?? "";
+  return (
+    message.includes("merchant_rules") &&
+    (message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("relation") ||
+      message.includes("could not find"))
+  );
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -174,14 +203,17 @@ export function GenieProvider({
     }
     householdRef.current = household.id;
 
-    const [accounts, transactions, budgets, overrides] = await Promise.all([
+    const [accounts, transactions, budgets, overrides, merchantRules] = await Promise.all([
       supabase.from("accounts").select("*").order("created_at"),
       fetchAllTransactions(),
       supabase.from("budgets").select("*"),
       supabase.from("recurring_overrides").select("*"),
+      supabase.from("merchant_rules").select("merchant_key, category_id"),
     ]);
 
-    const firstError = accounts.error ?? transactions.error ?? budgets.error ?? overrides.error;
+    const rulesMissing = isMissingMerchantRulesTable(merchantRules.error);
+    const firstError =
+      accounts.error ?? transactions.error ?? budgets.error ?? overrides.error ?? (rulesMissing ? null : merchantRules.error);
     if (firstError) {
       setState((prev) => ({ ...prev, ready: true, error: firstError.message }));
       return;
@@ -193,6 +225,7 @@ export function GenieProvider({
       transactions: (transactions.data ?? []).map(mapTransaction),
       budgets: (budgets.data ?? []).map(mapBudget),
       overrides: (overrides.data ?? []).map(mapOverride),
+      merchantRules: rulesMissing ? [] : (merchantRules.data ?? []).map(mapMerchantRule),
       ready: true,
       error: null,
     });
@@ -405,7 +438,12 @@ export async function importParsed(accountId: string, parsed: ParseResult) {
       description: row.description,
       merchant: row.merchant,
       amount_cents: row.amountCents,
-      category_id: row.categoryHint ?? guessCategory(row.description),
+      category_id: categoryForTransaction(
+        row.description,
+        row.merchant,
+        row.categoryHint,
+        learnedCategoryMap(store.state.merchantRules),
+      ),
       external_id: row.externalId ?? null,
       source: "import",
     });
@@ -426,28 +464,85 @@ export async function importParsed(accountId: string, parsed: ParseResult) {
   return { parsed, imported: rows.length, skipped };
 }
 
+const CATEGORY_UPDATE_CHUNK = 200;
+
 export async function updateTransactionCategory(id: string, categoryId: string) {
-  await updateTransaction(id, { categoryId });
+  return updateTransaction(id, { categoryId });
 }
 
 export async function updateTransaction(id: string, patch: { categoryId?: string; notes?: string }) {
   const store = requireStore();
+  const current = store.state.transactions.find((txn) => txn.id === id);
   const body: Record<string, unknown> = {};
   if (patch.categoryId !== undefined) body.category_id = patch.categoryId;
   if (patch.notes !== undefined) body.notes = patch.notes;
   const { error } = await supabase.from("transactions").update(body).eq("id", id);
   await throwIfError(error);
-  await store.refresh();
-}
 
-const CATEGORY_UPDATE_CHUNK = 200;
+  let alsoUpdated = 0;
+  let merchantLabel: string | null = null;
+  let remembered = false;
+
+  if (patch.categoryId !== undefined && current) {
+    const key = merchantCategoryKey(current.description, current.merchant);
+    merchantLabel = merchantCategoryLabel(current.description, current.merchant);
+    if (key) {
+      if (patch.categoryId === "uncategorized") {
+        const { error: forgetError } = await supabase
+          .from("merchant_rules")
+          .delete()
+          .eq("household_id", store.householdId())
+          .eq("merchant_key", key);
+        if (!isMissingMerchantRulesTable(forgetError)) await throwIfError(forgetError);
+      } else {
+        const { error: ruleError } = await supabase.from("merchant_rules").upsert(
+          {
+            household_id: store.householdId(),
+            merchant_key: key,
+            category_id: patch.categoryId,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "household_id,merchant_key" },
+        );
+        if (isMissingMerchantRulesTable(ruleError)) {
+          await store.refresh();
+          throw new Error("Genie saved this category, but it cannot remember the merchant until the database is updated.");
+        }
+        await throwIfError(ruleError);
+        remembered = true;
+
+        const ids = store.state.transactions
+          .filter(
+            (txn) =>
+              txn.id !== id &&
+              txn.categoryId !== patch.categoryId &&
+              merchantCategoryKey(txn.description, txn.merchant) === key,
+          )
+          .map((txn) => txn.id);
+        for (let i = 0; i < ids.length; i += CATEGORY_UPDATE_CHUNK) {
+          const slice = ids.slice(i, i + CATEGORY_UPDATE_CHUNK);
+          const { error: matchError } = await supabase
+            .from("transactions")
+            .update({ category_id: patch.categoryId })
+            .in("id", slice);
+          await throwIfError(matchError);
+          alsoUpdated += slice.length;
+        }
+      }
+    }
+  }
+
+  await store.refresh();
+  return { alsoUpdated, merchantLabel, remembered };
+}
 
 export async function recategorizeTransactions(mode: "uncategorized" | "rules") {
   const store = requireStore();
   const byCategory = new Map<string, string[]>();
 
+  const learned = learnedCategoryMap(store.state.merchantRules);
   for (const txn of store.state.transactions) {
-    const next = guessCategory(txn.description);
+    const next = categoryForTransaction(txn.description, txn.merchant, undefined, learned);
     if (next === "uncategorized" || next === txn.categoryId) continue;
     if (mode === "uncategorized" && txn.categoryId !== "uncategorized") continue;
     const ids = byCategory.get(next) ?? [];
@@ -529,8 +624,9 @@ export async function setRecurringNickname(id: string, merchant: string, nicknam
 export async function wipeHousehold() {
   const store = requireStore();
   const householdId = store.householdId();
-  for (const table of ["transactions", "accounts", "budgets", "recurring_overrides"]) {
+  for (const table of ["transactions", "accounts", "budgets", "recurring_overrides", "merchant_rules"]) {
     const { error } = await supabase.from(table).delete().eq("household_id", householdId);
+    if (table === "merchant_rules" && isMissingMerchantRulesTable(error)) continue;
     await throwIfError(error);
   }
   await store.refresh();
@@ -542,15 +638,16 @@ export async function signOut() {
 
 export async function exportBackup() {
   const store = requireStore();
-  const { household, accounts, transactions, budgets, overrides } = store.state;
+  const { household, accounts, transactions, budgets, overrides, merchantRules } = store.state;
   return JSON.stringify(
     {
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
       meta: { name: household?.name ?? "Our household" },
       accounts,
       transactions,
       budgets,
+      merchantRules,
       recurring: overrides.map((row) => ({
         merchant: row.merchant,
         status: row.status,
@@ -570,6 +667,7 @@ export async function importBackup(json: string) {
     accounts?: Account[];
     transactions?: Transaction[];
     budgets?: Array<{ categoryId: string; monthlyCents: number }>;
+    merchantRules?: Array<{ merchantKey: string; categoryId: string }>;
     recurring?: Array<{ merchant: string; status?: RecurringStatus; nickname?: string | null }>;
   };
 
@@ -624,6 +722,19 @@ export async function importBackup(json: string) {
       { onConflict: "household_id,category_id" },
     );
     await throwIfError(error);
+  }
+
+  for (const rule of data.merchantRules ?? []) {
+    if (!rule.merchantKey || !rule.categoryId) continue;
+    const { error } = await supabase.from("merchant_rules").upsert(
+      {
+        household_id: householdId,
+        merchant_key: rule.merchantKey,
+        category_id: rule.categoryId,
+      },
+      { onConflict: "household_id,merchant_key" },
+    );
+    if (!isMissingMerchantRulesTable(error)) await throwIfError(error);
   }
 
   for (const row of data.recurring ?? []) {

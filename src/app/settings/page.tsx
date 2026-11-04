@@ -76,8 +76,9 @@ export default function SettingsPage() {
       <section className="card mb-4 p-5">
         <h2 className="font-semibold">Categories</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Genie guesses a category from the merchant name. Bank category labels (like Amex
-          “shopping”) only apply when no merchant rule matches.
+          Genie guesses a category from the merchant name. When you change one, the same
+          store follows — other Walmart charges, for example, pick up Shopping too. Bank
+          labels (like Amex “shopping”) only apply when no merchant rule matches.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
@@ -97,7 +98,7 @@ export default function SettingsPage() {
             onClick={async () => {
               if (
                 !window.confirm(
-                  "Re-apply merchant rules to every matching transaction? Hand-picked categories for merchants we recognize will be overwritten.",
+                  "Re-apply merchant rules, including stores you've taught Genie? Categories that don't match the rule will be overwritten.",
                 )
               ) {
                 return;
