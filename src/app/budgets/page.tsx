@@ -60,8 +60,8 @@ export default function BudgetsPage() {
       <section className="card mb-5 p-5">
         <h2 className="font-[family-name:var(--font-display)] text-2xl">Let Genie build it</h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Pick how you want the month to feel. Genie uses the last three months of spending — not a
-          chatbot — then writes monthly caps you can still edit.
+          Pick how you want the month to feel. Genie uses the last three full months of spending —
+          not the month still in progress — then writes monthly caps you can still edit.
         </p>
         <div className="mt-4 flex flex-col gap-2">
           {BUDGET_PREFERENCES.map((item) => (

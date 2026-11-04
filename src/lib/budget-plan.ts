@@ -60,14 +60,27 @@ export interface AffordabilityContext {
   spentByCategory: Map<string, number>;
 }
 
-function recentMonthKeys(count: number, asOf: Date) {
-  const keys: string[] = [];
-  let key = monthKey(asOf);
-  for (let i = 0; i < count; i += 1) {
-    keys.push(key);
+function monthHasActivity(transactions: Transaction[], month: string) {
+  return transactions.some((txn) => !txn.excluded && inMonth(txn.date, month));
+}
+
+/**
+ * Last three finished months that actually have transactions.
+ * The in-progress month is left out so a mortgage that posts on the 1st
+ * is not averaged with a month that does not have it yet.
+ */
+function monthsForBudget(transactions: Transaction[], asOf: Date) {
+  const completed: string[] = [];
+  let key = previousMonthKey(monthKey(asOf));
+  for (let i = 0; i < 3; i += 1) {
+    completed.push(key);
     key = previousMonthKey(key);
   }
-  return keys;
+  const withActivity = completed.filter((month) => monthHasActivity(transactions, month));
+  if (withActivity.length > 0) return withActivity;
+
+  const current = monthKey(asOf);
+  return monthHasActivity(transactions, current) ? [current] : [];
 }
 
 function averageIncome(transactions: Transaction[], months: string[]) {
@@ -123,7 +136,16 @@ export function suggestBudgets(
   preference: BudgetPreference,
   asOf = new Date(),
 ): BudgetPlan {
-  const months = recentMonthKeys(3, asOf);
+  const months = monthsForBudget(transactions, asOf);
+  if (months.length === 0) {
+    return {
+      preference,
+      incomeCents: 0,
+      savingsCents: 0,
+      totalBudgetCents: 0,
+      suggestions: [],
+    };
+  }
   const incomeCents = Math.max(0, averageIncome(transactions, months));
   const averages = averageSpendByCategory(transactions, months);
 
