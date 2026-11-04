@@ -39,6 +39,18 @@ describe("suggestBudgets", () => {
     expect(plan.totalBudgetCents + plan.savingsCents).toBeLessThanOrEqual(plan.incomeCents);
   });
 
+  it("does not shrink a monthly bill when the current month has not posted it yet", () => {
+    const mortgage = [
+      txn({ date: "2026-08-03", amountCents: -239897, categoryId: "housing" }),
+      txn({ date: "2026-09-01", amountCents: -239897, categoryId: "housing" }),
+      txn({ date: "2026-10-01", amountCents: -239897, categoryId: "housing" }),
+      txn({ date: "2026-11-02", amountCents: -4500, categoryId: "dining" }),
+    ];
+    const plan = suggestBudgets(mortgage, "balanced", new Date("2026-11-03T12:00:00"));
+    const housing = plan.suggestions.find((row) => row.categoryId === "housing");
+    expect(housing?.monthlyCents).toBe(240000);
+  });
+
   it("gives dining more room when the preference is go-out-more", () => {
     const save = suggestBudgets(rows, "save-more", asOf);
     const goOut = suggestBudgets(rows, "go-out-more", asOf);
