@@ -1,4 +1,5 @@
 import { CATEGORIES } from "./categories";
+import { titleCase } from "./utils";
 
 function haystack(description: string) {
   return description
@@ -110,10 +111,17 @@ const RULES: Array<{ categoryId: string; patterns: RegExp[] }> = [
     patterns: [/\b(GEICO|STATE FARM|PROGRESSIVE|ALLSTATE|USAA|FARMERS INS|LIBERTY MUTUAL|AUTO OWNERS|AAA )\b/],
   },
   {
+    categoryId: "repairs",
+    patterns: [
+      /\b(HOME DEPOT|LOWE S|LOWES|MENARDS|ACE HARDWARE|HARBOR FREIGHT)\b/,
+      /\b(PLUMBER|PLUMBING|HVAC|ROOFER|ROOFING|HANDYMAN|ELECTRICIAN|FURNACE|WATER HEATER|GARAGE DOOR)\b/,
+    ],
+  },
+  {
     categoryId: "shopping",
     patterns: [
       /\bFAMILY DOLLAR\b/,
-      /\b(AMAZON|AMZN|TARGET|HOME DEPOT|LOWE S|LOWES|BEST BUY|IKEA|ETSY|TJ MAXX|MARSHALLS|HOMEGOODS|NORDSTROM|MACY S|MACYS)\b/,
+      /\b(AMAZON|AMZN|TARGET|BEST BUY|IKEA|ETSY|TJ MAXX|MARSHALLS|HOMEGOODS|NORDSTROM|MACY S|MACYS)\b/,
     ],
   },
   {
@@ -185,6 +193,144 @@ const AMEX_CATEGORY_MAP: Record<string, string> = {
   "travel-lodging": "travel",
 };
 
+const LEADING = new Set([
+  "POS",
+  "PURCHASE",
+  "DEBIT",
+  "CREDIT",
+  "NST",
+  "THE",
+  "CORRECTION",
+  "CARD",
+  "CHECKCARD",
+  "VISA",
+  "ACH",
+  "WEB",
+  "ONLINE",
+  "RECURRING",
+  "SQ",
+  "TST",
+  "SP",
+  "APL",
+  "OCC",
+  "DEPOSIT",
+  "WITHDRAWAL",
+  "PAYMENT",
+  "FROM",
+  "TO",
+]);
+
+// Second words that are part of the brand, not the city on the statement.
+const KEEP_SECOND = new Set([
+  "DEPOT",
+  "DOLLAR",
+  "YOLK",
+  "BILLS",
+  "HUT",
+  "CLUB",
+  "FOODS",
+  "JOE",
+  "JOES",
+  "MART",
+  "EXPRESS",
+  "HARDWARE",
+  "PIZZA",
+  "CAFE",
+  "COFFEE",
+  "FRESH",
+  "MARKET",
+  "ANIMAL",
+  "HOSPITAL",
+]);
+
+const QUALIFIER = new Set(["GAS", "FUEL", "PHARMACY", "RX"]);
+const SUFFIX = new Set(["LLC", "INC", "CORP", "LTD", "CO", "COMPANY"]);
+const BLOCKED = new Set([
+  "TRANSFER",
+  "PAYMENT",
+  "DEPOSIT",
+  "WITHDRAWAL",
+  "PURCHASE",
+  "MOBILE",
+  "BANKING",
+  "CHECK",
+  "FEE",
+  "INTEREST",
+  "ALLOWANCE",
+  "REMOTE",
+  "FROM",
+  "TO",
+]);
+const STATES = new Set(
+  "AL AK AZ AR CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA RI SC SD TN TX UT VA VT WA WI WV WY".split(
+    " ",
+  ),
+);
+const RESIDUE = /^(SUPER(CENTER)?.*|CENTER|STORE|STORES|COM|WWW|MARKETPLACE|MKTPLACE|MKTP|BILL|PHONE)$/;
+
+function merchantLetters(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/['’]/g, "")
+    .replace(/\./g, " ")
+    .replace(/-/g, "")
+    .replace(/[^A-Z0-9 ]+/g, " ")
+    .replace(/\d+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Stable store identity. Walmart.com, Wal-Mart Super Center, and WAL-MART #3726
+ * share a key, while Meijer Gas stays separate from Meijer groceries.
+ * Returns null for transfers and other descriptions that are not a store.
+ */
+export function merchantCategoryKey(description: string, merchant = ""): string | null {
+  const normalized = merchantLetters(`${description} ${merchant}`);
+  if (/\b(TRANSFER|XFER|REMOTE BANKING)\b/.test(normalized)) return null;
+
+  let words = normalized.split(" ").filter((word) => word.length >= 3 && !SUFFIX.has(word) && !RESIDUE.test(word));
+  while (words.length && LEADING.has(words[0])) words.shift();
+
+  const stateAt = words.findIndex((word, index) => index > 0 && STATES.has(word));
+  if (stateAt > 0) words = words.slice(0, stateAt);
+
+  while (
+    words.length > 2 &&
+    !KEEP_SECOND.has(words[words.length - 1]) &&
+    !QUALIFIER.has(words[words.length - 1])
+  ) {
+    words.pop();
+  }
+
+  if (words.length === 0) return null;
+
+  const key =
+    words.length >= 2 && (QUALIFIER.has(words[1]) || KEEP_SECOND.has(words[1]) || words[0].length < 5)
+      ? `${words[0]} ${words[1]}`
+      : words[0];
+
+  if (key.length < 4 || BLOCKED.has(key) || BLOCKED.has(words[0])) return null;
+  return key;
+}
+
+export function merchantCategoryLabel(description: string, merchant = "") {
+  const key = merchantCategoryKey(description, merchant);
+  return key ? titleCase(key.toLowerCase()) : null;
+}
+
+export function categoryForTransaction(
+  description: string,
+  merchant = "",
+  hint?: string,
+  learned?: ReadonlyMap<string, string>,
+) {
+  const key = merchantCategoryKey(description, merchant);
+  const taught = key && learned ? learned.get(key) : undefined;
+  if (taught) return taught;
+  return guessCategory(description, hint);
+}
+
 export function guessCategory(description: string, hint?: string) {
   const normalized = haystack(description);
   for (const rule of RULES) {
@@ -210,6 +356,6 @@ export function displayMerchant(description: string) {
     .replace(/\b\d{4,}\b/g, "")
     .trim();
 
-  const cut = cleaned.split(/[,-]/)[0]?.trim() ?? cleaned;
+  const cut = cleaned.split(",")[0]?.trim() ?? cleaned;
   return cut.length > 32 ? `${cut.slice(0, 29)}…` : cut;
 }

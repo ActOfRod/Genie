@@ -34,6 +34,7 @@ const CATEGORY_HINTS: Array<{ categoryId: string; pattern: RegExp }> = [
   { categoryId: "vacation", pattern: /\b(vacation|trip|getaway)\b/i },
   { categoryId: "travel", pattern: /\b(flight|hotel|airbnb)\b/i },
   { categoryId: "pets", pattern: /\b(vet|pet|dog|cat)\b/i },
+  { categoryId: "repairs", pattern: /\b(repair|plumber|hvac|home depot|maintenance)\b/i },
 ];
 
 export interface BudgetSuggestion {
